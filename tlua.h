@@ -101,7 +101,8 @@ namespace tlua
 			}
 			virtual ~LuaRefBase()
 			{
-				if (m_ref != LUA_REFNIL && L()) luaL_unref(L(), LUA_REGISTRYINDEX, m_ref);
+				if (m_ref != LUA_REFNIL && L()) 
+                    luaL_unref(L(), LUA_REGISTRYINDEX, m_ref);
 			}
 			virtual void push() const
 			{
@@ -325,10 +326,11 @@ namespace tlua
 #ifndef TLUA_NO_SOCKET
 				luaopen_socket_core(L());
 #endif
-
 				LuaRef loaders = getGlobal("package")["loaders"];
-				if (loaders.type() == LUA_TTABLE) loaders.append(&luaLoader);
-				else getGlobal("package")["searchers"].append(&luaLoader);
+                if (loaders.type() != LUA_TTABLE) {
+                    loaders = (LuaRef)getGlobal("package")["searchers"];
+                }
+                loaders.append(&luaLoader);
 
 				setGlobal("__traceback", &traceback);
 				lua_gc(L(), LUA_GCSETSTEPMUL, 1);
@@ -405,20 +407,23 @@ namespace tlua
 				auto stack = get()->getGlobal("debug")["traceback"].call<const char*>(msg, 0);
 				get()->onScriptError(msg, stack);
 			}
-			static void luaLoader(string requireFile)
+			static int luaLoader(lua_State* L)
 			{
+                string requireFile = lua_tostring(L, -1);
 				while (auto c = strchr(&requireFile[0], '.')) *c = '/';
 				requireFile += ".lua";
 				auto filePath = get()->srcDir + "/" + requireFile;
 				auto chunk = get()->loadFile(filePath.c_str());
 				if (chunk.size() == 0) {
 					get()->logError(string("can not get file data of ") + filePath);
-					return;
+					return 0;
 				}
-				auto err = luaL_loadbuffer(L(), chunk.data(), chunk.size(), requireFile.c_str());
+				auto err = luaL_loadbuffer(L, chunk.data(), chunk.size(), requireFile.c_str());
 				if (err == LUA_ERRSYNTAX) {
 					get()->logError(string("syntax error in ") + filePath);
+                    return 0;
 				}
+                return 1;
 			}
 
 		private:
@@ -474,6 +479,13 @@ namespace tlua
 				lua_pushnil(L());
 			}
 		};
+
+        template <>
+        struct Stack <lua_CFunction> : LuaObj
+        {
+            static void push(lua_CFunction f) { lua_pushcfunction(L(), f); }
+            static lua_CFunction get(int index) { return lua_tocfunction(L(), index); }
+        };
 
 		template <>
 		struct Stack<lua_Number> : LuaObj
