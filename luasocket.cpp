@@ -6,7 +6,7 @@
 #include <stdio.h>
 
 #include "luasocket.h"
-#ifdef _WIN32
+#ifdef _MSC_VER
 #include <Ws2tcpip.h>
 #pragma comment(lib,"ws2_32.lib")
 #undef gai_strerror
@@ -2494,7 +2494,7 @@ static void collect_fd(lua_State *L, int tab, int itab,
         fd = getfd(L);
         if (fd != SOCKET_INVALID) {
             /* make sure we don't overflow the fd_set */
-#ifdef _WIN32
+#ifdef _MSC_VER
             if (n >= FD_SETSIZE)
                 luaL_argerror(L, tab, "too many sockets");
 #else
@@ -2575,7 +2575,7 @@ static void make_assoc(lua_State *L, int tab) {
 }
 
 
-#ifndef _WIN32
+#ifndef _MSC_VER
 /*=========================================================================*\
 * Serial stream
 * LuaSocket toolkit
@@ -3203,7 +3203,7 @@ static int tcp_global_connect(lua_State *L) {
 //#include "lauxlib.h"
 
 
-#ifdef _WIN32
+#ifdef _MSC_VER
 #include <windows.h>
 #else
 #include <time.h>
@@ -3312,7 +3312,7 @@ p_timeout timeout_markstart(p_timeout tm) {
 * Returns
 *   time in s.
 \*-------------------------------------------------------------------------*/
-#ifdef _WIN32
+#ifdef _MSC_VER
 double timeout_gettime(void) {
     FILETIME ft;
     double t;
@@ -3388,7 +3388,7 @@ static int timeout_lua_gettime(lua_State *L)
 /*-------------------------------------------------------------------------*\
 * Sleep for n seconds.
 \*-------------------------------------------------------------------------*/
-#ifdef _WIN32
+#ifdef _MSC_VER
 int timeout_lua_sleep(lua_State *L)
 {
     double n = luaL_checknumber(L, 1);
@@ -3874,7 +3874,7 @@ static int udp_global_create6(lua_State *L) {
     return udp_create(L, AF_INET6);
 }
 
-#ifndef _WIN32
+#ifndef _MSC_VER
 /*=========================================================================*\
 * Unix domain socket
 * LuaSocket toolkit
@@ -3904,7 +3904,7 @@ int luaopen_socket_unix(lua_State *L)
 }
 
 #endif
-#ifndef _WIN32
+#ifndef _MSC_VER
 /*=========================================================================*\
 * Unix domain socket tcp sub module
 * LuaSocket toolkit
@@ -4258,7 +4258,7 @@ static int unixtcp_tcp_global_create(lua_State *L) {
     }
 }
 #endif
-#ifndef _WIN32
+#ifndef _MSC_VER
 /*=========================================================================*\
 * Unix domain socket udp submodule
 * LuaSocket toolkit
@@ -4670,7 +4670,7 @@ static int unixudp_global_create(lua_State *L)
 * The penalty of calling select to avoid busy-wait is only paid when
 * the I/O call fail in the first place.
 \*=========================================================================*/
-#ifndef _WIN32
+#ifndef _MSC_VER
 #include <string.h>
 #include <signal.h>
 
@@ -5120,7 +5120,7 @@ const char *socket_gaistrerror(int err) {
 * The penalty of calling select to avoid busy-wait is only paid when
 * the I/O call fail in the first place.
 \*=========================================================================*/
-#ifdef _WIN32
+#ifdef _MSC_VER
 #include <string.h>
 
 
