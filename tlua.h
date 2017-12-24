@@ -448,17 +448,23 @@ namespace tlua
     using imp::LuaMgr;
     using imp::LuaRef;
 
-#define ExportLuaModule(moduleName, funcs) \
-    static bool __reg_##moduleName = (tlua::LuaMgr::getRegisters().push_back([]{ \
-        typedef moduleName Class; \
-        auto mgr = tlua::LuaMgr::get(); \
-        auto module = mgr->newTable(); \
+
+
+#define ExportLuaType(name, funcs) \
+    static bool __reg_##name = (tlua::LuaMgr::getRegisters().push_back([]{ \
+        typedef name Class; \
+        auto* mgr = tlua::LuaMgr::get(); \
+        auto& table = mgr->newTable(); \
         funcs \
-        mgr->setGlobal(#moduleName, module); \
+        mgr->setGlobal(#name, table); \
     }), true);
 
-#define ExportLuaFunc(name) module[#name] = &Class::name;
-#define ExportLuaField(name, val) module[#name] = val;
+#define _LuaTypeBase(base) table["base"] = #base; 
+
+#define ExportLuaTypeInherit(name, base, funcs) ExportLuaType(name, funcs _LuaTypeBase(base) )
+#define ExportLuaFunc(name) table[#name] = &Class::name;
+#define ExportLuaFuncOverload(name, type) table[#name] = type &Class::name;
+#define ExportLuaField(name) table[#name] = Class::name;
 
     //////////////////////////////////////////////////////////////////////////
 
