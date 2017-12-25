@@ -347,7 +347,30 @@ namespace tlua
 
                 setGlobal("__traceback", &traceback);
                 lua_gc(L(), LUA_GCSETSTEPMUL, 1);
-                for (auto i : getRegisters()) i();
+                for (auto i : getRegisters()) {
+                    i.second();
+                }
+
+                auto wrap = doString(R"(
+                    return function(className)
+                        local class = _G[className]
+                        local mt = {}
+                        if class.New then
+                            mt.__call = function(class, ...)
+                                return debug.setmetatable(class.New(...), class)
+                            end
+                        end
+                        if class.base then
+                            class.base = _G[class.base]
+                            mt.__index = class.base
+                        end
+                        class.__index = class
+                        setmetatable(class, mt)
+                    end                            
+                )");
+                for (auto i : getRegisters()) {
+                    wrap.call(i.first.c_str());
+                }
             }
             void setSourceRoot(string luaRoot = "") { srcDir = luaRoot; }
             virtual ~LuaMgr()
@@ -355,9 +378,9 @@ namespace tlua
                 lua_close(L());
                 L() = 0;
             }
-            static std::vector<Register>& getRegisters()
+            static std::map<string,Register>& getRegisters()
             {
-                static std::vector<Register> registers;
+                static std::map<string, Register> registers;
                 return registers;
             }
             template<typename T>
@@ -447,19 +470,19 @@ namespace tlua
         auto Construct(A... a) { return new T(forward<A>(a)...); }
 
         template<typename T>
-        void Destruct(T* t) { delete t; }
+        void Destruct(T* d) { delete d; }
     }
 
     using imp::LuaMgr;
     using imp::LuaRef;
 
 
-
 #define ExportLuaType(name, funcs) \
-    static bool __reg_##name = (tlua::LuaMgr::getRegisters().push_back([]{ \
+    static auto __reg_##name = tlua::LuaMgr::getRegisters().insert({#name, []{ \
         typedef name Class; \
         auto* mgr = tlua::LuaMgr::get(); \
         auto& table = mgr->newTable(); \
+        table["name"] = #name; \
         funcs \
         mgr->setGlobal(#name, table); \
     }});
@@ -476,7 +499,6 @@ namespace tlua
 
     namespace imp
     {
-
         template <class T>
         struct Stack <T&> : Stack<T>
         {};
@@ -484,7 +506,6 @@ namespace tlua
         template <class T>
         struct Stack <const T> : Stack<T>
         {};
-
 
         template <>
         struct Stack<void>
@@ -510,10 +531,6 @@ namespace tlua
             static void push(lua_CFunction f) 
             {
                 lua_pushcfunction(L(), f); 
-            }
-            static lua_CFunction get(int index) 
-            {
-                return lua_tocfunction(L(), index); 
             }
         };
 
@@ -592,14 +609,14 @@ namespace tlua
         {
             static T* get(int index)
             {
-                return static_cast<T*>(lua_touserdata(L(), index));
+                auto p = static_cast<T**>(lua_touserdata(L(), index));
+                return p ? *p : nullptr;
             }
             static void push(T* r)
             {
-                lua_pushlightuserdata(L(), r);
+                *(T**)lua_newuserdata(L(), sizeof(r)) = r;
             }
         };       
-        
 
         template <>
         struct Stack<LuaRef> : LuaObj
@@ -642,8 +659,8 @@ namespace tlua
             }
             static function<R(A...)> get(int idx) 
             {
-                auto f = LuaRef::fromIndex(idx);
-                return [=](A... a) -> R {                    
+                auto& f = LuaRef::fromIndex(idx);
+                return [=](A... a) {                    
                     return (R) f.call(forward<A>(a)...);
                 };
             }
@@ -659,7 +676,7 @@ namespace tlua
                 lua_pushcclosure(L(), [](lua_State* L) {
                     return LuaCaller::callCpp<R, A...>(2, [L](A&&... a) {
                         auto f = *(MF*)lua_touserdata(L, lua_upvalueindex(1));
-                        auto obj = (C*)lua_touserdata(L, 1);
+                        auto obj = *(C**)lua_touserdata(L, 1);
                         return (obj->*f)(forward<A>(a)...);
                     });
                 }, 1);
@@ -676,7 +693,7 @@ namespace tlua
                 lua_pushcclosure(L(), [](lua_State* L) {
                     return LuaCaller::callCpp<R, A...>(2, [L](A&&... a) {
                         auto f = *(MF*)lua_touserdata(L, lua_upvalueindex(1));
-                        auto obj = (C*)lua_touserdata(L, 1);
+                        auto obj = *(C**)lua_touserdata(L, 1);
                         return (obj->*f)(forward<A>(a)...);
                     });
                 }, 1);
@@ -732,6 +749,4 @@ namespace tlua
             }
         };
     }
-
-
 }
