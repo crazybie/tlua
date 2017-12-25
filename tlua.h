@@ -466,7 +466,7 @@ namespace tlua
 
 #define _LuaTypeBase(base)                      table["base"] = #base; 
 #define ExportLuaTypeInherit(name, base, funcs) ExportLuaType(name, funcs _LuaTypeBase(base) )
-#define ExportLuaConstructor(...)               table["New"] = &tlua::imp::Construct<Class,__VA_ARGS__>;
+#define ExportLuaConstructor(...)               table["New"] = &tlua::imp::Construct<Class,__VA_ARGS__>; table["Delete"] = &tlua::imp::Destruct<Class>;
 #define ExportLuaFunc(name)                     table[#name] = &Class::name;
 #define ExportLuaFuncOverload(name, type)       table[#name] = type &Class::name;
 #define ExportLuaField(name)                    table[#name] = Class::name;
