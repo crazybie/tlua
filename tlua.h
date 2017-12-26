@@ -79,8 +79,17 @@ namespace tlua
             template<typename R, typename... A, typename F>
             static int callCpp(int argIndex, F f)
             {
-                Stack<R>::push((callCpp<R, A...>(argIndex, f, make_index_sequence<sizeof...(A)>()), Nil()));
-                return std::is_same<R, void>::value ? 0 : 1;
+                try {
+                    Stack<R>::push((callCpp<R, A...>(argIndex, f, make_index_sequence<sizeof...(A)>()), Nil()));
+                    return std::is_same<R, void>::value ? 0 : 1;
+                }
+                catch (std::exception &e) {
+                    luaL_error(L(), "C++ exception thrown: %s", e.what());
+                }
+                catch (...) {
+                    luaL_error(L(), "C++ exception thrown");
+                }
+                return 0;
             }
             template<typename R, typename... A>
             static R callLuaFromStack(A&&... a)
@@ -392,12 +401,18 @@ namespace tlua
             LuaRef doFile(const char *name)
             {
                 auto cmd = string("return require('") + name + "')";
-                luaL_loadstring(L(), cmd.c_str());
+                if (luaL_loadstring(L(), cmd.c_str())) {
+                    logError(lua_tostring(L(), -1));
+                    return LuaRef();
+                }
                 return LuaCaller::callLuaFromStack<LuaRef>();
             }
             LuaRef doString(const char* name)
             {
-                luaL_loadstring(L(), name);
+                if (luaL_loadstring(L(), name)) {
+                    logError(lua_tostring(L(), -1));
+                    return LuaRef();
+                }
                 return LuaCaller::callLuaFromStack<LuaRef>();
             }
             LuaRef newTable()
@@ -487,9 +502,9 @@ namespace tlua
         mgr->setGlobal(#name, table); \
     }});
 
-
+#define _ExportLuaTypeBase(base)                table["base"] = #base;
 #define ExportLuaTypeMeta(name, val)            table[#name] = val;
-#define ExportLuaTypeInherit(name, base, funcs) ExportLuaType(name, funcs ExportLuaTypeMeta(base, #base) )
+#define ExportLuaTypeInherit(name, base, funcs) ExportLuaType(name, funcs _ExportLuaTypeBase(base) )
 #define ExportLuaConstructor(...)               table["New"] = &tlua::imp::Construct<Class,__VA_ARGS__>; table["Delete"] = &tlua::imp::Destruct<Class>;
 #define ExportLuaFunc(name)                     table[#name] = &Class::name;
 #define ExportLuaFuncOverload(name, type)       table[#name] = type &Class::name;
