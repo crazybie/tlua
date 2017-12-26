@@ -467,10 +467,10 @@ namespace tlua
         };
 
         template<typename T, typename... A>
-        auto Construct(A... a)
-        {
-            return new T(forward<A>(a)...);
-        }
+        auto Construct(A... a) { return new T(forward<A>(a)...); }
+
+        template<typename T>
+        void Destruct(T* d) { delete d; }
     }
 
     using imp::LuaMgr;
@@ -490,7 +490,7 @@ namespace tlua
 
 #define ExportLuaTypeMeta(name, val)            table[#name] = val;
 #define ExportLuaTypeInherit(name, base, funcs) ExportLuaType(name, funcs ExportLuaTypeMeta(base, #base) )
-#define ExportLuaConstructor(...)               table["New"] = &tlua::imp::Construct<Class,__VA_ARGS__>;
+#define ExportLuaConstructor(...)               table["New"] = &tlua::imp::Construct<Class,__VA_ARGS__>; table["Delete"] = &tlua::imp::Destruct<Class>;
 #define ExportLuaFunc(name)                     table[#name] = &Class::name;
 #define ExportLuaFuncOverload(name, type)       table[#name] = type &Class::name;
 #define ExportLuaField(name)                    table[#name] = Class::name;
