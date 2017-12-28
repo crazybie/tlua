@@ -749,7 +749,7 @@ namespace tlua
             lua_pushcclosure(L(), [](lua_State* L) {
                 return LuaCaller::callCpp<R, A...>(2, [L](A&&... a) {
                     auto f = *(MF*)lua_touserdata(L, lua_upvalueindex(1));
-                    auto obj = *(C**)lua_touserdata(L, 1);
+                    auto obj = Stack<C*>::get(1);
                     return (obj->*f)(forward<A>(a)...);
                 });
             }, 1);
@@ -766,7 +766,7 @@ namespace tlua
             lua_pushcclosure(L(), [](lua_State* L) {
                 return LuaCaller::callCpp<R, A...>(2, [L](A&&... a) {
                     auto f = *(MF*)lua_touserdata(L, lua_upvalueindex(1));
-                    auto obj = *(C**)lua_touserdata(L, 1);
+                    auto obj = Stack<C*>::get(1);
                     return (obj->*f)(forward<A>(a)...);
                 });
             }, 1);
