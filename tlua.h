@@ -750,6 +750,7 @@ namespace tlua
                 return LuaCaller::callCpp<R, A...>(2, [L](A&&... a) {
                     auto f = *(MF*)lua_touserdata(L, lua_upvalueindex(1));
                     auto obj = Stack<C*>::get(1);
+                    if (!obj) throw std::runtime_error("self is nil");
                     return (obj->*f)(forward<A>(a)...);
                 });
             }, 1);
@@ -767,6 +768,7 @@ namespace tlua
                 return LuaCaller::callCpp<R, A...>(2, [L](A&&... a) {
                     auto f = *(MF*)lua_touserdata(L, lua_upvalueindex(1));
                     auto obj = Stack<C*>::get(1);
+                    if (!obj) throw std::runtime_error("self is nil");
                     return (obj->*f)(forward<A>(a)...);
                 });
             }, 1);
