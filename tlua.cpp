@@ -38,7 +38,7 @@ namespace tlua
                 local mt = {}
                 if class.New then
                     mt.__call = function(class, ...)
-                        return debug.setmetatable(class.New(...), class)
+                        return class.New(...)
                     end
                 end
                 if class.base then

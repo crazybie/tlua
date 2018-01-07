@@ -16,14 +16,11 @@
 #include "luasocket.h"
 
 
-#define ExportLuaType(name, funcs) \
-    static auto __reg_##name = tlua::LuaMgr::getRegisters().insert({#name, []{ \
-        typedef name Class; \
-        auto* mgr = tlua::LuaMgr::get(); \
-        auto& table = mgr->newTable(); \
-        table["name"] = #name; \
+#define ExportLuaType(Type, funcs) \
+    static auto __reg_##Type = tlua::LuaMgr::getRegisters().insert({#Type, []{ \
+        typedef Type Class; \
+        auto& table = tlua::LuaMgr::get()->newType<Type>(#Type); \
         funcs \
-        mgr->setGlobal(#name, table); \
     }});
 
 #define _ExportLuaTypeBase(base)                table["base"] = #base;
@@ -454,6 +451,22 @@ namespace tlua
             return s;
         }
 
+        template<typename T>
+        static string& TypeNames() {
+            static string s;
+            return s;
+        }
+
+        template<typename T>
+        LuaRef newType(const char* name) 
+        {
+            auto& r = newTable();
+            r["name"] = name;
+            TypeNames<T>() = name;
+            setGlobal(name, r);
+            return r;
+        }
+
         function<void(const string&)> logError;
         function<string(const char*)> fileLoader;
 
@@ -467,8 +480,8 @@ namespace tlua
     };
 
     //////////////////////////////////////////////////////////////////////////
+    /// basic types
 
-    
     template <class T>
     struct Stack <T&> : Stack<T>
     {};
@@ -476,9 +489,6 @@ namespace tlua
     template <class T>
     struct Stack <const T> : Stack<T>
     {};
-
-    //////////////////////////////////////////////////////////////////////////
-    /// basic types
 
     template <>
     struct Stack<void>
@@ -647,6 +657,7 @@ namespace tlua
     //////////////////////////////////////////////////////////////////////////
     // user types
 
+    // general value type
     template<typename T>
     struct StackHelper<T, false, false> : LuaObj
     {
@@ -672,6 +683,8 @@ namespace tlua
         static void push(T* r)
         {
             *(T**)lua_newuserdata(L(), sizeof(r)) = r;
+            lua_getglobal(L(), LuaMgr::TypeNames<T>().c_str());
+            if (lua_istable(L(), -1)) lua_setmetatable(L(), -2);
         }
     };
 
