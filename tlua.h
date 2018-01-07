@@ -12,9 +12,8 @@
 #ifndef NO_MINI_LUA
 #include "lua.h"
 #endif
-#ifndef TLUA_NO_SOCKET
+
 #include "luasocket.h"
-#endif
 
 
 #define ExportLuaType(name, funcs) \
@@ -89,6 +88,8 @@ namespace tlua
         void Destruct(T* d) { delete d; }
     }
 
+    //////////////////////////////////////////////////////////////////////////
+
     using namespace helpers;
 
     struct LuaObj
@@ -111,6 +112,8 @@ namespace tlua
     template<typename T, bool isEnum, bool isFunctor>
     struct StackHelper;
 
+    //////////////////////////////////////////////////////////////////////////
+
     template <typename T>
     struct Stack
     {
@@ -126,8 +129,12 @@ namespace tlua
         }
     };
 
+    //////////////////////////////////////////////////////////////////////////
+
     struct Nil
     {};
+
+    //////////////////////////////////////////////////////////////////////////
 
     class LuaCaller : public LuaObj
     {
@@ -170,6 +177,8 @@ namespace tlua
             return f(Stack<A>::get(offset + index)...);
         }
     };
+
+    //////////////////////////////////////////////////////////////////////////
 
     class LuaRef;
     class Iterator;
@@ -248,6 +257,8 @@ namespace tlua
         int m_ref = LUA_REFNIL;
     };
 
+    //////////////////////////////////////////////////////////////////////////
+
     class TableProxy : public LuaRefBase
     {
         int m_tableRef;
@@ -287,6 +298,8 @@ namespace tlua
             return LuaRef(*this)[forward<T>(key)];
         }
     };
+
+    //////////////////////////////////////////////////////////////////////////
 
     class LuaRef : public LuaRefBase
     {
@@ -342,6 +355,8 @@ namespace tlua
         Iterator end() const;
     };
 
+    //////////////////////////////////////////////////////////////////////////
+
     class Iterator : public LuaObj
     {
     public:
@@ -395,61 +410,16 @@ namespace tlua
         return Iterator();
     }
 
+    //////////////////////////////////////////////////////////////////////////
+
     class LuaMgr : public LuaObj
     {
     public:
         typedef void(*Register)();
 
-        LuaMgr()
-        {
-            get() = this;
-            L() = luaL_newstate();
-            luaL_openlibs(L());
-#ifndef TLUA_NO_SOCKET
-            luaopen_socket_core(L());
-#endif
-            LuaRef loaders = getGlobal("package")["loaders"];
-            if (loaders.type() != LUA_TTABLE) {
-                loaders = (LuaRef)getGlobal("package")["searchers"];
-            }
-            loaders.append(&luaLoader);
-
-            setGlobal("__traceback", &traceback);
-            //lua_gc(L(), LUA_GCSETSTEPMUL, 1);
-            for (auto i : getRegisters()) {
-                i.second();
-            }
-            logError = [](const string& err) {
-                fprintf(stderr, "%s\n", err.c_str());
-            };
-            fileLoader = loadFile;
-
-            wrapClasses();
-        }
+        LuaMgr();
         void setSourceRoot(string luaRoot = "") { srcDir = luaRoot; }
-        void wrapClasses()
-        {
-            auto wrap = doString(R"(
-                    return function(className)
-                        local class = _G[className]
-                        local mt = {}
-                        if class.New then
-                            mt.__call = function(class, ...)
-                                return debug.setmetatable(class.New(...), class)
-                            end
-                        end
-                        if class.base then
-                            class.base = _G[class.base]
-                            mt.__index = class.base
-                        end
-                        class.__index = class
-                        setmetatable(class, mt)
-                    end                            
-                )");
-            for (auto i : getRegisters()) {
-                wrap.call(i.first.c_str());
-            }
-        }
+        void wrapClasses();
         virtual ~LuaMgr()
         {
             lua_close(L());
@@ -466,23 +436,8 @@ namespace tlua
             Stack<T>::push(forward<T>(t));
             lua_setglobal(L(), name);
         }
-        LuaRef doFile(const char *name)
-        {
-            auto cmd = string("return require('") + name + "')";
-            if (luaL_loadstring(L(), cmd.c_str())) {
-                logError(lua_tostring(L(), -1));
-                return LuaRef();
-            }
-            return LuaCaller::callLuaFromStack<LuaRef>();
-        }
-        LuaRef doString(const char* name)
-        {
-            if (luaL_loadstring(L(), name)) {
-                logError(lua_tostring(L(), -1));
-                return LuaRef();
-            }
-            return LuaCaller::callLuaFromStack<LuaRef>();
-        }
+        LuaRef doFile(const char *name);
+        LuaRef doString(const char* name);
         LuaRef newTable()
         {
             lua_newtable(L());
@@ -503,41 +458,9 @@ namespace tlua
         function<string(const char*)> fileLoader;
 
     private:
-        static string loadFile(const char* name)
-        {
-            string ret;
-            if (FILE* f = fopen(name, "rb")) {
-                fseek(f, 0, SEEK_END);
-                ret.resize(ftell(f));
-                fseek(f, 0, SEEK_SET);
-                fread((void*)ret.data(), ret.size(), 1, f);
-                fclose(f);
-            }
-            return ret;
-        }
-        static void traceback(const char* msg)
-        {
-            auto stack = get()->getGlobal("debug")["traceback"].call<const char*>(msg, 0);
-            get()->logError(stack);
-        }
-        static int luaLoader(lua_State* L)
-        {
-            string requireFile = lua_tostring(L, -1);
-            while (auto c = strchr(&requireFile[0], '.')) *c = '/';
-            requireFile += ".lua";
-            auto filePath = get()->srcDir + "/" + requireFile;
-            auto chunk = get()->loadFile(filePath.c_str());
-            if (chunk.size() == 0) {
-                get()->logError(string("can not get file data of ") + filePath);
-                return 0;
-            }
-            auto err = luaL_loadbuffer(L, chunk.data(), chunk.size(), requireFile.c_str());
-            if (err == LUA_ERRSYNTAX) {
-                get()->logError(string("syntax error in ") + filePath);
-                return 0;
-            }
-            return 1;
-        }
+        static string loadFile(const char* name);
+        static void traceback(const char* msg);
+        static int luaLoader(lua_State* L);
 
     private:
         string srcDir;
@@ -545,6 +468,7 @@ namespace tlua
 
     //////////////////////////////////////////////////////////////////////////
 
+    
     template <class T>
     struct Stack <T&> : Stack<T>
     {};
@@ -552,6 +476,9 @@ namespace tlua
     template <class T>
     struct Stack <const T> : Stack<T>
     {};
+
+    //////////////////////////////////////////////////////////////////////////
+    /// basic types
 
     template <>
     struct Stack<void>
@@ -613,8 +540,10 @@ namespace tlua
 
     template <>
     struct Stack<unsigned int> : Stack<lua_Integer> {};
+
 #endif
 
+    // enum
     template<typename T>
     struct StackHelper<T, true, false> : LuaObj
     {
@@ -660,6 +589,75 @@ namespace tlua
         static void	push(bool r)
         {
             lua_pushboolean(L(), r ? 1 : 0);
+        }
+    };
+
+    //////////////////////////////////////////////////////////////////////////
+    /// std types
+
+    template <>
+    struct Stack<string> : LuaObj
+    {
+        static void push(string const& v)
+        {
+            lua_pushlstring(L(), v.c_str(), v.length());
+        }
+        static string get(int index)
+        {
+            return Stack<const char*>::get(index);
+        }
+    };
+
+    template <typename T>
+    struct Stack<std::vector<T>> : LuaObj
+    {
+        static void push(const std::vector<T>& v)
+        {
+            auto& tb = LuaMgr::get()->newTable();
+            for (auto& i : v) tb.append(i);
+            tb.push();
+        }
+        static std::vector<T> get(int index)
+        {
+            const LuaRef& tb = LuaRef::fromIndex(index);
+            std::vector<T> v;
+            for (auto i : tb) v.emplace_back((T)i.second);
+            return v;
+        }
+    };
+
+    template <typename K, typename V>
+    struct Stack<std::map<K, V>> : LuaObj
+    {
+        static void push(const std::map<K, V>& v)
+        {
+            auto& tb = LuaMgr::get()->newTable();
+            for (auto& i : v) tb[i.first] = i.second;
+            tb.push();
+        }
+        static std::map<K, V> get(int index)
+        {
+            const LuaRef& tb = LuaRef::fromIndex(index);
+            std::map<K, V> v;
+            for (auto& i : tb) v[(K)i.first] = std::move((V)i.second);
+            return v;
+        }
+    };
+
+    //////////////////////////////////////////////////////////////////////////
+    // user types
+
+    template<typename T>
+    struct StackHelper<T, false, false> : LuaObj
+    {
+        static T get(int index)
+        {
+            auto p = static_cast<T*>(lua_touserdata(L(), index));
+            return *p;
+        }
+        static void push(T& r)
+        {
+            new (lua_newuserdata(L(), sizeof(r))) T(r);
         }
     };
 
@@ -725,6 +723,7 @@ namespace tlua
         }
     };
 
+    // lambda
     template<typename T>
     struct StackHelper<T, false, true> : LuaObj
     {
@@ -775,52 +774,4 @@ namespace tlua
         }
     };
 
-    template <>
-    struct Stack<string> : LuaObj
-    {
-        static void push(string const& v)
-        {
-            lua_pushlstring(L(), v.c_str(), v.length());
-        }
-        static string get(int index)
-        {
-            return Stack<const char*>::get(index);
-        }
-    };
-
-    template <typename T>
-    struct Stack<std::vector<T>> : LuaObj
-    {
-        static void push(const std::vector<T>& v)
-        {
-            auto& tb = LuaMgr::get()->newTable();
-            for (auto& i : v) tb.append(i);
-            tb.push();
-        }
-        static std::vector<T> get(int index)
-        {
-            const LuaRef& tb = LuaRef::fromIndex(index);
-            std::vector<T> v;
-            for (auto i : tb) v.emplace_back((T)i.second);
-            return v;
-        }
-    };
-
-    template <typename K, typename V>
-    struct Stack<std::map<K, V>> : LuaObj
-    {
-        static void push(const std::map<K, V>& v)
-        {
-            auto& tb = LuaMgr::get()->newTable();
-            for (auto& i : v) tb[i.first] = i.second;
-            tb.push();
-        }
-        static std::map<K, V> get(int index)
-        {
-            const LuaRef& tb = LuaRef::fromIndex(index);
-            std::map<K, V> v;
-            for (auto i : tb) v[(K)i.first] = std::move((V)i.second);
-            return v;
-        }
-    };
 }
