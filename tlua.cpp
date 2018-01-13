@@ -2,14 +2,17 @@
 
 namespace tlua 
 {
+    LuaMgr* LuaMgr::instance = nullptr;
+    lua_State* LuaObj::L = nullptr;
+
 
     LuaMgr::LuaMgr()
     {
-        get() = this;
-        L() = luaL_newstate();
+        instance = this;
+        L = luaL_newstate();
 
-        luaL_openlibs(L());
-        luaopen_socket_core(L());
+        luaL_openlibs(L);
+        luaopen_socket_core(L);
 
         LuaRef loaders = getGlobal("package")["loaders"];
         if (loaders.type() != LUA_TTABLE) {
@@ -19,7 +22,7 @@ namespace tlua
 
         setGlobal("__traceback", &traceback);
 
-        //lua_gc(L(), LUA_GCSETSTEPMUL, 1);
+        //lua_gc(L, LUA_GCSETSTEPMUL, 1);
 
         for (auto i : getRegisters()) {
             i.second();
@@ -63,8 +66,7 @@ namespace tlua
 
     LuaMgr::~LuaMgr()
     {
-        lua_close(L());
-        L() = 0;
+        lua_close(L);
     }
 
     std::map<std::string, tlua::LuaMgr::Register>& LuaMgr::getRegisters()
@@ -76,8 +78,8 @@ namespace tlua
     tlua::LuaRef LuaMgr::doFile(const char *name)
     {
         auto cmd = string("return require('") + name + "')";
-        if (luaL_loadstring(L(), cmd.c_str())) {
-            logError(lua_tostring(L(), -1));
+        if (luaL_loadstring(L, cmd.c_str())) {
+            logError(lua_tostring(L, -1));
             return LuaRef();
         }
         return FuncHelper::callLua<LuaRef>();
@@ -85,8 +87,8 @@ namespace tlua
 
     tlua::LuaRef LuaMgr::doString(const char* name)
     {
-        if (luaL_loadstring(L(), name)) {
-            logError(lua_tostring(L(), -1));
+        if (luaL_loadstring(L, name)) {
+            logError(lua_tostring(L, -1));
             return LuaRef();
         }
         return FuncHelper::callLua<LuaRef>();
@@ -94,20 +96,14 @@ namespace tlua
 
     tlua::LuaRef LuaMgr::newTable()
     {
-        lua_newtable(L());
+        lua_newtable(L);
         return LuaRef::fromStack();
     }
 
     tlua::LuaRef LuaMgr::getGlobal(const char* name)
     {
-        lua_getglobal(L(), name);
+        lua_getglobal(L, name);
         return LuaRef::fromStack();
-    }
-
-    tlua::LuaMgr*& LuaMgr::get()
-    {
-        static LuaMgr* s;
-        return s;
     }
 
     std::string LuaMgr::loadFile(const char* name)
@@ -126,8 +122,8 @@ namespace tlua
     void LuaMgr::traceback(const char* msg)
     {
         auto ignoreFuncStackCnt = 2;// debug.traceback + __traceback
-        auto stack = get()->getGlobal("debug")["traceback"].call<const char*>(msg, ignoreFuncStackCnt);
-        get()->logError(stack);
+        auto stack = instance->getGlobal("debug")["traceback"].call<const char*>(msg, ignoreFuncStackCnt);
+        instance->logError(stack);
     }
 
     int LuaMgr::luaLoader(lua_State* L)
@@ -135,15 +131,15 @@ namespace tlua
         string requireFile = lua_tostring(L, -1);
         while (auto c = strchr(&requireFile[0], '.')) *c = '/';
         requireFile += ".lua";
-        auto filePath = get()->srcDir + "/" + requireFile;
-        auto chunk = get()->loadFile(filePath.c_str());
+        auto filePath = instance->srcDir + "/" + requireFile;
+        auto chunk = instance->loadFile(filePath.c_str());
         if (chunk.size() == 0) {
-            get()->logError(Sprintf("can not get file data of %s", filePath.c_str()).c_str());
+            instance->logError(Sprintf("can not get file data of %s", filePath.c_str()).c_str());
             return 0;
         }
         auto err = luaL_loadbuffer(L, chunk.data(), chunk.size(), requireFile.c_str());
         if (err == LUA_ERRSYNTAX) {
-            get()->logError(Sprintf("syntax error in %s", filePath.c_str()).c_str());
+            instance->logError(Sprintf("syntax error in %s", filePath.c_str()).c_str());
             return 0;
         }
         return 1;
@@ -151,18 +147,18 @@ namespace tlua
 
     void LuaRefBase::iniFromStack()
     {
-        m_ref = luaL_ref(L(), LUA_REGISTRYINDEX);
+        m_ref = luaL_ref(L, LUA_REGISTRYINDEX);
     }
 
     LuaRefBase::~LuaRefBase()
     {
-        if (m_ref != LUA_REFNIL && L())
-            luaL_unref(L(), LUA_REGISTRYINDEX, m_ref);
+        if (m_ref != LUA_REFNIL && L)
+            luaL_unref(L, LUA_REGISTRYINDEX, m_ref);
     }
 
     void LuaRefBase::push() const
     {
-        lua_rawgeti(L(), LUA_REGISTRYINDEX, m_ref);
+        lua_rawgeti(L, LUA_REGISTRYINDEX, m_ref);
     }
 
     int LuaRefBase::type() const
@@ -170,20 +166,20 @@ namespace tlua
         if (m_ref == LUA_REFNIL) return LUA_TNIL;
         PopOnExit p;
         push();
-        return lua_type(L(), -1);
+        return lua_type(L, -1);
     }
 
     int LuaRefBase::createRef() const
     {
         if (m_ref == LUA_REFNIL) return LUA_REFNIL;
         push();
-        return luaL_ref(L(), LUA_REGISTRYINDEX);
+        return luaL_ref(L, LUA_REGISTRYINDEX);
     }
 
     void LuaRefBase::pop()
     {
-        luaL_unref(L(), LUA_REGISTRYINDEX, m_ref);
-        m_ref = luaL_ref(L(), LUA_REGISTRYINDEX);
+        luaL_unref(L, LUA_REGISTRYINDEX, m_ref);
+        m_ref = luaL_ref(L, LUA_REGISTRYINDEX);
     }
 
     bool LuaRefBase::isNil() const
@@ -200,7 +196,7 @@ namespace tlua
     {
         PopOnExit p{};
         push();
-        return (int)lua_objlen(L(), -1);
+        return (int)lua_objlen(L, -1);
     }
 
     TableProxy::TableProxy(int tableRef) : m_tableRef(tableRef)
@@ -217,10 +213,10 @@ namespace tlua
 
     void TableProxy::push() const
     {
-        lua_rawgeti(L(), LUA_REGISTRYINDEX, m_tableRef);
-        lua_rawgeti(L(), LUA_REGISTRYINDEX, m_ref);
-        lua_gettable(L(), -2);
-        lua_remove(L(), -2); // remove the table
+        lua_rawgeti(L, LUA_REGISTRYINDEX, m_tableRef);
+        lua_rawgeti(L, LUA_REGISTRYINDEX, m_ref);
+        lua_gettable(L, -2);
+        lua_remove(L, -2); // remove the table
     }
 
     LuaRef::LuaRef(LuaRef&& other)
@@ -241,7 +237,7 @@ namespace tlua
 
     tlua::LuaRef LuaRef::fromIndex(int index)
     {
-        lua_pushvalue(L(), index);
+        lua_pushvalue(L, index);
         return fromStack();
     }
 
@@ -254,7 +250,7 @@ namespace tlua
 
     tlua::LuaRef& LuaRef::operator=(LuaRef&& other)
     {
-        luaL_unref(L(), LUA_REGISTRYINDEX, m_ref);
+        luaL_unref(L, LUA_REGISTRYINDEX, m_ref);
         m_ref = other.m_ref;
         other.m_ref = LUA_REFNIL;
         return *this;
@@ -302,18 +298,12 @@ namespace tlua
         m_table.push();
         m_key.push();
         valid = false;
-        if (lua_next(L(), -2)) {
+        if (lua_next(L, -2)) {
             valid = true;
             m_value.pop();
             m_key.pop();
         }
-        lua_pop(L(), 1);
-    }
-
-    lua_State*& LuaObj::L()
-    {
-        static lua_State* s;
-        return s;
+        lua_pop(L, 1);
     }
 
 }

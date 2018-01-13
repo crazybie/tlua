@@ -103,13 +103,13 @@ namespace tlua
 
     struct LuaObj
     {
-        static lua_State*& L();
+        static lua_State* L;
 
         struct PopOnExit
         {
             ~PopOnExit()
             {
-                lua_pop(L(), 1);
+                lua_pop(L, 1);
             }
         };
     };
@@ -152,10 +152,10 @@ namespace tlua
                 return std::is_same<R, void>::value ? 0 : 1;
             }
             catch (std::exception &e) {
-                luaL_error(L(), "C++ exception: %s", e.what());
+                luaL_error(L, "C++ exception: %s", e.what());
             }
             catch (...) {
-                luaL_error(L(), "C++ exception: unknown");
+                luaL_error(L, "C++ exception: unknown");
             }
             return 0;
         }
@@ -163,11 +163,11 @@ namespace tlua
         static R callLua(A&&... a)
         {
             PopOnExit t;
-            lua_getglobal(L(), "__traceback");
-            lua_insert(L(), -2);
+            lua_getglobal(L, "__traceback");
+            lua_insert(L, -2);
             std::initializer_list<char> ordered = { (Stack<A>::push(forward<A>(a)),0)... };
             int nargs = sizeof...(A);
-            lua_pcall(L(), nargs, 1, -nargs - 2);
+            lua_pcall(L, nargs, 1, -nargs - 2);
             return Stack<R>::get(-1);
         }
     private:
@@ -175,7 +175,7 @@ namespace tlua
         static R callCpp(int argsOffset, F&& f, index_sequence<index...>)
         {
             auto expectedNumArgs = sizeof...(A) + argsOffset - 1;
-            auto numArgs = lua_gettop(L());
+            auto numArgs = lua_gettop(L);
             if (numArgs < expectedNumArgs)
                 throw std::runtime_error(Sprintf("Invalid arguments count: expect: %d, got %d", expectedNumArgs, numArgs));
             return f(Stack<A>::get(argsOffset + index)...);
@@ -205,7 +205,7 @@ namespace tlua
         {
             PopOnExit p;
             push();
-            return Stack<T>::get(lua_gettop(L()));
+            return Stack<T>::get(lua_gettop(L));
         }
 
         template <typename R = void, typename... A>
@@ -220,8 +220,8 @@ namespace tlua
         {
             push();
             Stack <T>::push(forward<T>(v));
-            luaL_ref(L(), -2);
-            lua_pop(L(), 1);
+            luaL_ref(L, -2);
+            lua_pop(L, 1);
         }
     protected:
         int m_ref = LUA_REFNIL;
@@ -242,10 +242,10 @@ namespace tlua
         TableProxy& operator= (T&& v)
         {
             PopOnExit p;
-            lua_rawgeti(L(), LUA_REGISTRYINDEX, m_tableRef);
-            lua_rawgeti(L(), LUA_REGISTRYINDEX, m_ref);
+            lua_rawgeti(L, LUA_REGISTRYINDEX, m_tableRef);
+            lua_rawgeti(L, LUA_REGISTRYINDEX, m_ref);
             Stack <T>::push(forward<T>(v));
-            lua_rawset(L(), -3);
+            lua_rawset(L, -3);
             return *this;
         }
         template <typename T>
@@ -277,9 +277,9 @@ namespace tlua
         template <typename T>
         LuaRef& operator= (T&& rhs)
         {
-            luaL_unref(L(), LUA_REGISTRYINDEX, m_ref);
+            luaL_unref(L, LUA_REGISTRYINDEX, m_ref);
             Stack <T>::push(forward<T>(rhs));
-            m_ref = luaL_ref(L(), LUA_REGISTRYINDEX);
+            m_ref = luaL_ref(L, LUA_REGISTRYINDEX);
             return *this;
         }
         Iterator begin() const;
@@ -320,13 +320,13 @@ namespace tlua
         LuaRef doString(const char* name);
         LuaRef newTable();
         LuaRef getGlobal(const char* name);
-        static LuaMgr*& get();
+        static LuaMgr* get() { return instance; }
 
         template<typename T>
         void setGlobal(const char* name, T&& t)
         {
             Stack<T>::push(forward<T>(t));
-            lua_setglobal(L(), name);
+            lua_setglobal(L, name);
         }
 
         template<typename T>
@@ -355,6 +355,7 @@ namespace tlua
 
     private:
         string srcDir;
+        static LuaMgr* instance;
     };
 
     //////////////////////////////////////////////////////////////////////////
@@ -382,7 +383,7 @@ namespace tlua
     {
         static void push(Nil r)
         {
-            lua_pushnil(L());
+            lua_pushnil(L);
         }
     };
 
@@ -391,7 +392,7 @@ namespace tlua
     {
         static void push(lua_CFunction f)
         {
-            lua_pushcfunction(L(), f);
+            lua_pushcfunction(L, f);
         }
     };
 
@@ -400,11 +401,11 @@ namespace tlua
     {
         static lua_Number get(int index)
         {
-            return lua_tonumber(L(), index);
+            return lua_tonumber(L, index);
         }
         static void push(lua_Number r)
         {
-            lua_pushnumber(L(), r);
+            lua_pushnumber(L, r);
         }
     };
 
@@ -413,11 +414,11 @@ namespace tlua
     {
         static lua_Integer get(int index)
         {
-            return lua_tointeger(L(), index);
+            return lua_tointeger(L, index);
         }
         static void push(lua_Integer r)
         {
-            lua_pushinteger(L(), r);
+            lua_pushinteger(L, r);
         }
     };
 
@@ -437,11 +438,11 @@ namespace tlua
     {
         static T get(int index)
         {
-            return (T)lua_tointeger(L(), index);
+            return (T)lua_tointeger(L, index);
         }
         static void push(T r)
         {
-            lua_pushinteger(L(), (int)r);
+            lua_pushinteger(L, (int)r);
         }
     };
 
@@ -450,11 +451,11 @@ namespace tlua
     {
         static const char* get(int index)
         {
-            return lua_tostring(L(), index);
+            return lua_tostring(L, index);
         }
         static void push(const char *r)
         {
-            lua_pushstring(L(), r);
+            lua_pushstring(L, r);
         }
     };
 
@@ -463,7 +464,7 @@ namespace tlua
     {
         static void push(const char *r)
         {
-            lua_pushlstring(L(), r, N - 1);
+            lua_pushlstring(L, r, N - 1);
         }
     };
 
@@ -472,11 +473,11 @@ namespace tlua
     {
         static bool	get(int index)
         {
-            return lua_toboolean(L(), index) != 0;
+            return lua_toboolean(L, index) != 0;
         }
         static void	push(bool r)
         {
-            lua_pushboolean(L(), r ? 1 : 0);
+            lua_pushboolean(L, r ? 1 : 0);
         }
     };
 
@@ -488,7 +489,7 @@ namespace tlua
     {
         static void push(string const& v)
         {
-            lua_pushlstring(L(), v.c_str(), v.length());
+            lua_pushlstring(L, v.c_str(), v.length());
         }
         static string get(int index)
         {
@@ -556,7 +557,7 @@ namespace tlua
         }
         static void push(const T& r)
         {
-            auto* p = (UserDataValue<T>*)lua_newuserdata(L(), sizeof(UserDataValue<T>));
+            auto* p = (UserDataValue<T>*)lua_newuserdata(L, sizeof(UserDataValue<T>));
             p->ptr = p->buffer;
             new (p->ptr) T(r);
             Stack<T*>::setMetatable();
@@ -568,20 +569,20 @@ namespace tlua
     {
         static T* get(int index)
         {
-            auto p = static_cast<UserData*>(lua_touserdata(L(), index));
+            auto p = static_cast<UserData*>(lua_touserdata(L, index));
             return p && p->ptr ? (T*)p->ptr : nullptr;
         }
         static void push(T* r)
         {
-            auto d = (UserData*)lua_newuserdata(L(), sizeof(UserData));
+            auto d = (UserData*)lua_newuserdata(L, sizeof(UserData));
             d->ptr = r;
             setMetatable();
         }
         static void setMetatable()
         {
-            lua_getglobal(L(), LuaMgr::typeNames<T>().c_str());
-            assert(lua_istable(L(), -1) && "type not registered");
-            lua_setmetatable(L(), -2);
+            lua_getglobal(L, LuaMgr::typeNames<T>().c_str());
+            assert(lua_istable(L, -1) && "type not registered");
+            lua_setmetatable(L, -2);
         }
     };
 
@@ -604,8 +605,8 @@ namespace tlua
         static void push(R(*f)(A...))
         {
             using F = decltype(f);
-            *(F*)lua_newuserdata(L(), sizeof(F)) = f;
-            lua_pushcclosure(L(), [](lua_State* L) {
+            *(F*)lua_newuserdata(L, sizeof(F)) = f;
+            lua_pushcclosure(L, [](lua_State* L) {
                 auto f = *(F*)lua_touserdata(L, lua_upvalueindex(1));
                 return FuncHelper::callCpp<R, A...>(1, f);
             }, 1);
@@ -618,8 +619,8 @@ namespace tlua
         static void push(const function<R(A...)>& f)
         {
             using F = function<R(A...)>;
-            new (lua_newuserdata(L(), sizeof(F))) F(f);
-            lua_pushcclosure(L(), [](lua_State* L) {
+            new (lua_newuserdata(L, sizeof(F))) F(f);
+            lua_pushcclosure(L, [](lua_State* L) {
                 auto& f = *(F*)lua_touserdata(L, lua_upvalueindex(1));
                 return FuncHelper::callCpp<R, A...>(1, f);
             }, 1);
@@ -639,8 +640,8 @@ namespace tlua
     {
         static void push(T&& f)
         {
-            new (lua_newuserdata(L(), sizeof(T))) T(move(f));
-            lua_pushcclosure(L(), [](lua_State* L) {
+            new (lua_newuserdata(L, sizeof(T))) T(move(f));
+            lua_pushcclosure(L, [](lua_State* L) {
                 auto& f = *(T*)lua_touserdata(L, lua_upvalueindex(1));
                 using FT = function_traits<T>;
                 return FuncHelper::callCpp<FT::return_type>((FT::argument_tuple*)nullptr, 1, f);
@@ -654,8 +655,8 @@ namespace tlua
         static void push(R(C::*f)(A...))
         {
             using MF = decltype(f);
-            *(MF*)lua_newuserdata(L(), sizeof(MF)) = f;
-            lua_pushcclosure(L(), [](lua_State* L) {
+            *(MF*)lua_newuserdata(L, sizeof(MF)) = f;
+            lua_pushcclosure(L, [](lua_State* L) {
                 return FuncHelper::callCpp<R, A...>(2, [L](A&&... a) {
                     auto f = *(MF*)lua_touserdata(L, lua_upvalueindex(1));
                     auto obj = Stack<C*>::get(1);
@@ -672,8 +673,8 @@ namespace tlua
         static void push(R(C::*f)(A...)const)
         {
             using MF = decltype(f);
-            *(MF*)lua_newuserdata(L(), sizeof(MF)) = f;
-            lua_pushcclosure(L(), [](lua_State* L) {
+            *(MF*)lua_newuserdata(L, sizeof(MF)) = f;
+            lua_pushcclosure(L, [](lua_State* L) {
                 return FuncHelper::callCpp<R, A...>(2, [L](A&&... a) {
                     auto f = *(MF*)lua_touserdata(L, lua_upvalueindex(1));
                     auto obj = Stack<C*>::get(1);
