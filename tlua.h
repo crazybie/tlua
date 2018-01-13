@@ -24,13 +24,13 @@
         funcs \
     }});
 
-#define _ExportLuaTypeBase(base)                table["base"] = #base;
-#define ExportLuaTypeMeta(name, val)            table[#name] = val;
-#define ExportLuaTypeInherit(name, base, funcs) ExportLuaType(name, funcs _ExportLuaTypeBase(base) )
-#define ExportLuaConstructor(...)               table["New"] = &tlua::Construct<Class,__VA_ARGS__>; table["Delete"] = &tlua::Destruct<Class>;
-#define ExportLuaFunc(name)                     table[#name] = &Class::name;
-#define ExportLuaFuncOverload(name, type)       table[#name] = type &Class::name;
-#define ExportLuaField(name)                    table[#name] = Class::name;
+#define _ExportLuaTypeBase(base)                    table["base"] = #base;
+#define ExportLuaTypeMeta(name, val)                table[#name] = val;
+#define ExportLuaTypeInherit(name, base, funcs)     ExportLuaType(name, funcs _ExportLuaTypeBase(base) )
+#define ExportLuaConstructor(...)                   table["New"] = &tlua::Construct<Class,__VA_ARGS__>; table["Delete"] = &tlua::Destruct<Class>;
+#define ExportLuaFunc(name)                         table[#name] = &Class::name;
+#define ExportLuaFuncOverload(name, newName, type)  table[#newName] = type &Class::name;
+#define ExportLuaField(name)                        table[#name] = Class::name;
 
 
 namespace tlua
@@ -80,7 +80,7 @@ namespace tlua
         //////////////////////////////////////////////////////////////////////////
 
         template<typename T, typename... A>
-        T* Construct(A... a) { return new T(forward<A>(a)...); }
+        T* Construct(A... a) { return new T(a...); }
 
         template<typename T>
         void Destruct(T* d) { delete d; }
@@ -89,7 +89,7 @@ namespace tlua
         string Sprintf(const char* fmt, A&&... args) 
         {
             char buf[255];
-            sprintf_s(buf, fmt, args...);
+            sprintf_s(buf, fmt, forward<A>(args)...);
             return buf;
         }
     }
@@ -140,15 +140,15 @@ namespace tlua
     {
     public:
         template<typename R, typename... A, typename F>
-        static int callCpp(tuple<A...>*, int argsOffset, F f)
+        static int callCpp(tuple<A...>*, int argsOffset, F&& f)
         {
-            return callCpp<R, A...>(argsOffset, f);
+            return callCpp<R, A...>(argsOffset, forward<F>(f));
         }
         template<typename R, typename... A, typename F>
-        static int callCpp(int argsOffset, F f)
+        static int callCpp(int argsOffset, F&& f)
         {
             try {
-                Stack<R>::push((callCpp<R, A...>(argsOffset, f, make_index_sequence<sizeof...(A)>()), Nil()));
+                Stack<R>::push((callCpp<R, A...>(argsOffset, forward<F>(f), make_index_sequence<sizeof...(A)>()), Nil()));
                 return std::is_same<R, void>::value ? 0 : 1;
             }
             catch (std::exception &e) {
@@ -172,7 +172,7 @@ namespace tlua
         }
     private:
         template<typename R, typename... A, typename F, size_t... index>
-        static R callCpp(int argsOffset, F f, index_sequence<index...>)
+        static R callCpp(int argsOffset, F&& f, index_sequence<index...>)
         {
             auto expectedNumArgs = sizeof...(A) + argsOffset - 1;
             auto numArgs = lua_gettop(L());
@@ -627,7 +627,7 @@ namespace tlua
         static function<R(A...)> get(int idx)
         {
             auto& f = LuaRef::fromIndex(idx);
-            return [=](A... a) {
+            return [=](A&&... a) {
                 return (R)f.call(forward<A>(a)...);
             };
         }
