@@ -18,7 +18,9 @@ namespace tlua
         loaders.append(&luaLoader);
 
         setGlobal("__traceback", &traceback);
+
         //lua_gc(L(), LUA_GCSETSTEPMUL, 1);
+
         for (auto i : getRegisters()) {
             i.second();
         }
@@ -28,6 +30,11 @@ namespace tlua
         fileLoader = loadFile;
 
         wrapClasses();
+    }
+
+    void LuaMgr::setSourceRoot(string luaRoot /*= ""*/)
+    {
+        srcDir = luaRoot;
     }
 
     void LuaMgr::wrapClasses()
@@ -54,6 +61,18 @@ namespace tlua
         }
     }
 
+    LuaMgr::~LuaMgr()
+    {
+        lua_close(L());
+        L() = 0;
+    }
+
+    std::map<std::string, tlua::LuaMgr::Register>& LuaMgr::getRegisters()
+    {
+        static std::map<string, Register> registers;
+        return registers;
+    }
+
     tlua::LuaRef LuaMgr::doFile(const char *name)
     {
         auto cmd = string("return require('") + name + "')";
@@ -61,7 +80,7 @@ namespace tlua
             logError(lua_tostring(L(), -1));
             return LuaRef();
         }
-        return LuaCaller::callLuaFromStack<LuaRef>();
+        return FuncHelper::callLua<LuaRef>();
     }
 
     tlua::LuaRef LuaMgr::doString(const char* name)
@@ -70,7 +89,25 @@ namespace tlua
             logError(lua_tostring(L(), -1));
             return LuaRef();
         }
-        return LuaCaller::callLuaFromStack<LuaRef>();
+        return FuncHelper::callLua<LuaRef>();
+    }
+
+    tlua::LuaRef LuaMgr::newTable()
+    {
+        lua_newtable(L());
+        return LuaRef::fromStack();
+    }
+
+    tlua::LuaRef LuaMgr::getGlobal(const char* name)
+    {
+        lua_getglobal(L(), name);
+        return LuaRef::fromStack();
+    }
+
+    tlua::LuaMgr*& LuaMgr::get()
+    {
+        static LuaMgr* s;
+        return s;
     }
 
     std::string LuaMgr::loadFile(const char* name)
@@ -88,7 +125,8 @@ namespace tlua
 
     void LuaMgr::traceback(const char* msg)
     {
-        auto stack = get()->getGlobal("debug")["traceback"].call<const char*>(msg, 0);
+        auto ignoreFuncStackCnt = 2;// debug.traceback + __traceback
+        auto stack = get()->getGlobal("debug")["traceback"].call<const char*>(msg, ignoreFuncStackCnt);
         get()->logError(stack);
     }
 
@@ -100,15 +138,182 @@ namespace tlua
         auto filePath = get()->srcDir + "/" + requireFile;
         auto chunk = get()->loadFile(filePath.c_str());
         if (chunk.size() == 0) {
-            get()->logError(string("can not get file data of ") + filePath);
+            get()->logError(Sprintf("can not get file data of %s", filePath.c_str()).c_str());
             return 0;
         }
         auto err = luaL_loadbuffer(L, chunk.data(), chunk.size(), requireFile.c_str());
         if (err == LUA_ERRSYNTAX) {
-            get()->logError(string("syntax error in ") + filePath);
+            get()->logError(Sprintf("syntax error in %s", filePath.c_str()).c_str());
             return 0;
         }
         return 1;
+    }
+
+    void LuaRefBase::iniFromStack()
+    {
+        m_ref = luaL_ref(L(), LUA_REGISTRYINDEX);
+    }
+
+    LuaRefBase::~LuaRefBase()
+    {
+        if (m_ref != LUA_REFNIL && L())
+            luaL_unref(L(), LUA_REGISTRYINDEX, m_ref);
+    }
+
+    void LuaRefBase::push() const
+    {
+        lua_rawgeti(L(), LUA_REGISTRYINDEX, m_ref);
+    }
+
+    int LuaRefBase::type() const
+    {
+        if (m_ref == LUA_REFNIL) return LUA_TNIL;
+        PopOnExit p;
+        push();
+        return lua_type(L(), -1);
+    }
+
+    int LuaRefBase::createRef() const
+    {
+        if (m_ref == LUA_REFNIL) return LUA_REFNIL;
+        push();
+        return luaL_ref(L(), LUA_REGISTRYINDEX);
+    }
+
+    void LuaRefBase::pop()
+    {
+        luaL_unref(L(), LUA_REGISTRYINDEX, m_ref);
+        m_ref = luaL_ref(L(), LUA_REGISTRYINDEX);
+    }
+
+    bool LuaRefBase::isNil() const
+    {
+        return type() == LUA_TNIL;
+    }
+
+    LuaRefBase::operator bool() const
+    {
+        return !isNil();
+    }
+
+    int LuaRefBase::length() const
+    {
+        PopOnExit p{};
+        push();
+        return (int)lua_objlen(L(), -1);
+    }
+
+    TableProxy::TableProxy(int tableRef) : m_tableRef(tableRef)
+    {
+        iniFromStack();
+    }
+
+    TableProxy::TableProxy(TableProxy&& other)
+    {
+        m_tableRef = other.m_tableRef;
+        m_ref = other.m_ref;
+        other.m_ref = LUA_REFNIL;
+    }
+
+    void TableProxy::push() const
+    {
+        lua_rawgeti(L(), LUA_REGISTRYINDEX, m_tableRef);
+        lua_rawgeti(L(), LUA_REGISTRYINDEX, m_ref);
+        lua_gettable(L(), -2);
+        lua_remove(L(), -2); // remove the table
+    }
+
+    LuaRef::LuaRef(LuaRef&& other)
+    {
+        m_ref = other.m_ref;
+        other.m_ref = LUA_REFNIL;
+    }
+
+    LuaRef::LuaRef(TableProxy const& other)
+    {
+        m_ref = other.createRef();
+    }
+
+    LuaRef::LuaRef(LuaRef const& other)
+    {
+        m_ref = other.createRef();
+    }
+
+    tlua::LuaRef LuaRef::fromIndex(int index)
+    {
+        lua_pushvalue(L(), index);
+        return fromStack();
+    }
+
+    tlua::LuaRef LuaRef::fromStack()
+    {
+        LuaRef r;
+        r.iniFromStack();
+        return r;
+    }
+
+    tlua::LuaRef& LuaRef::operator=(LuaRef&& other)
+    {
+        luaL_unref(L(), LUA_REGISTRYINDEX, m_ref);
+        m_ref = other.m_ref;
+        other.m_ref = LUA_REFNIL;
+        return *this;
+    }
+
+    tlua::Iterator LuaRef::begin() const
+    {
+        return Iterator(*this);
+    }
+
+    tlua::Iterator LuaRef::end() const
+    {
+        return Iterator();
+    }
+
+    Iterator::Iterator(const LuaRef& table) : m_table(table)
+    {
+        next();
+    }
+
+    tlua::Iterator& Iterator::operator++()
+    {
+        if (valid) next();
+        return *this;
+    }
+
+    bool Iterator::operator!=(const Iterator& r) const
+    {
+        return !(*this == r);
+    }
+
+    bool Iterator::operator==(const Iterator& r) const
+    {
+        if (!valid && !r.valid) return true;
+        return false;
+    }
+
+    std::pair<tlua::LuaRef, tlua::LuaRef> Iterator::operator*()
+    {
+        return std::pair<LuaRef, LuaRef>(m_key, m_value);
+    }
+
+    void Iterator::next()
+    {
+        m_table.push();
+        m_key.push();
+        valid = false;
+        if (lua_next(L(), -2)) {
+            valid = true;
+            m_value.pop();
+            m_key.pop();
+        }
+        lua_pop(L(), 1);
+    }
+
+    lua_State*& LuaObj::L()
+    {
+        static lua_State* s;
+        return s;
     }
 
 }
