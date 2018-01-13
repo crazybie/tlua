@@ -66,7 +66,7 @@ namespace tlua
 
     LuaMgr::~LuaMgr()
     {
-        lua_close(L);
+        lua_close(L);        
     }
 
     std::map<std::string, tlua::LuaMgr::Register>& LuaMgr::getRegisters()

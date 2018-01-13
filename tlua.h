@@ -17,20 +17,20 @@
 #include "luasocket.h"
 
 
-#define ExportLuaType(Type, funcs) \
+#define TLuaType(Type, funcs) \
     static auto __reg_##Type = tlua::LuaMgr::getRegisters().insert({#Type, []{ \
         typedef Type Class; \
         auto& table = tlua::LuaMgr::get()->newType<Type>(#Type); \
         funcs \
     }});
 
-#define _ExportLuaTypeBase(base)                    table["base"] = #base;
-#define ExportLuaTypeMeta(name, val)                table[#name] = val;
-#define ExportLuaTypeInherit(name, base, funcs)     ExportLuaType(name, funcs _ExportLuaTypeBase(base) )
-#define ExportLuaConstructor(...)                   table["New"] = &tlua::Construct<Class,__VA_ARGS__>; table["Delete"] = &tlua::Destruct<Class>;
-#define ExportLuaFunc(name)                         table[#name] = &Class::name;
-#define ExportLuaFuncOverload(name, newName, type)  table[#newName] = type &Class::name;
-#define ExportLuaField(name)                        table[#name] = Class::name;
+#define _TLuaTypeBase(base)                    table["base"] = #base;
+#define TLuaField(name, val)                   table[#name] = val;
+#define TLuaTypeInherit(name, base, funcs)     TLuaType(name, funcs _TLuaTypeBase(base) )
+#define TLuaConstructor(...)                   table["New"] = &tlua::Construct<Class,__VA_ARGS__>; table["Delete"] = &tlua::Destruct<Class>;
+#define TLuaFunc(name)                         table[#name] = &Class::name;
+#define TLuaFuncOverload(name, newName, type)  table[#newName] = type &Class::name;
+#define TLuaEnumItem(name)                     table[#name] = Class::name;
 
 
 namespace tlua
