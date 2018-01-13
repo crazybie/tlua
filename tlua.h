@@ -509,7 +509,7 @@ namespace tlua
         {
             const LuaRef& tb = LuaRef::fromIndex(index);
             std::vector<T> v;
-            for (auto i : tb) v.emplace_back((T)i.second);
+            for (auto& i : tb) v.emplace_back((T)i.second);
             return v;
         }
     };
@@ -569,7 +569,7 @@ namespace tlua
         static T* get(int index)
         {
             auto p = static_cast<UserData*>(lua_touserdata(L(), index));
-            return p->ptr ? (T*)p->ptr : nullptr;
+            return p && p->ptr ? (T*)p->ptr : nullptr;
         }
         static void push(T* r)
         {
