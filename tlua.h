@@ -24,13 +24,13 @@
         funcs \
     }});
 
-#define _TLuaTypeBase(base)                    table["base"] = #base;
-#define TLuaField(name, val)                   table[#name] = val;
-#define TLuaTypeInherit(name, base, funcs)     TLuaType(name, funcs _TLuaTypeBase(base) )
-#define TLuaConstructor(...)                   table["New"] = &tlua::Construct<Class,__VA_ARGS__>; table["Delete"] = &tlua::Destruct<Class>;
-#define TLuaFunc(name)                         table[#name] = &Class::name;
-#define TLuaFuncOverload(name, newName, type)  table[#newName] = type &Class::name;
-#define TLuaEnumItem(name)                     table[#name] = Class::name;
+#define _TLuaTypeBase(base)                     table["base"] = #base;
+#define TLuaFieldValue(name, val)               table[#name] = val;
+#define TLuaTypeInherit(name, base, funcs)      TLuaType(name, funcs _TLuaTypeBase(base) )
+#define TLuaConstructor(...)                    table["New"] = &tlua::Construct<Class,__VA_ARGS__>; table["Delete"] = &tlua::Destruct<Class>;
+#define TLuaFunc(name)                          table[#name] = &Class::name;
+#define TLuaFuncOverload(name, newName, type)   table[#newName] = type &Class::name;
+#define TLuaField(name)                         table[#name] = Class::name;
 
 
 namespace tlua
@@ -312,15 +312,15 @@ namespace tlua
         typedef void(*Register)();
 
         LuaMgr();
-        void setSourceRoot(string luaRoot = "");
-        void wrapClasses();
         virtual ~LuaMgr();
+        static LuaMgr* get() { return instance; }
+
+        void setSourceRoot(string luaRoot = "");
         static std::map<string, Register>& getRegisters();
         LuaRef doFile(const char *name);
         LuaRef doString(const char* name);
         LuaRef newTable();
         LuaRef getGlobal(const char* name);
-        static LuaMgr* get() { return instance; }
 
         template<typename T>
         void setGlobal(const char* name, T&& t)
@@ -339,7 +339,6 @@ namespace tlua
         LuaRef newType(const char* name) 
         {
             auto& r = newTable();
-            r["name"] = name;
             typeNames<T>() = name;
             setGlobal(name, r);
             return r;
@@ -481,6 +480,19 @@ namespace tlua
         }
     };
 
+    template <>
+    struct Stack<LuaRef> : LuaObj
+    {
+        static void push(LuaRef const& v)
+        {
+            v.push();
+        }
+        static LuaRef get(int index)
+        {
+            return LuaRef::fromIndex(index);
+        }
+    };
+
     //////////////////////////////////////////////////////////////////////////
     /// std types
 
@@ -494,6 +506,23 @@ namespace tlua
         static string get(int index)
         {
             return Stack<const char*>::get(index);
+        }
+    };
+
+    template<typename T>
+    struct Stack<initializer_list<T>> :LuaObj
+    {
+        static void push(initializer_list<T>& l)
+        {
+            for (auto& i : i) Stack<T>::push(i);
+        }
+        static initializer_list<T> get(int index)
+        {
+            const LuaRef& tb = LuaRef::fromIndex(index);
+            static std::vector<T> v; // TODO
+            v.clear();
+            for (auto& i : tb) v.emplace_back((T)i.second);
+            return initializer_list<T>(&v.front(), &v.back() + 1);
         }
     };
 
@@ -530,6 +559,25 @@ namespace tlua
             std::map<K, V> v;
             for (auto& i : tb) v[(K)i.first] = std::move((V)i.second);
             return v;
+        }
+    };
+
+    template<typename R, typename... A>
+    struct Stack<function<R(A...)>> : LuaObj
+    {
+        static void push(const function<R(A...)>& f)
+        {
+            using F = function<R(A...)>;
+            new (lua_newuserdata(L, sizeof(F))) F(f);
+            lua_pushcclosure(L, [](lua_State* L) {
+                auto& f = *(F*)lua_touserdata(L, lua_upvalueindex(1));
+                return FuncHelper::callCpp<R, A...>(1, f);
+            }, 1);
+        }
+        static function<R(A...)> get(int idx)
+        {
+            auto& f = LuaRef::fromIndex(idx);
+            return [=](A&&... a) { return f.call<R>(forward<A>(a)...); };
         }
     };
 
@@ -586,18 +634,6 @@ namespace tlua
         }
     };
 
-    template <>
-    struct Stack<LuaRef> : LuaObj
-    {
-        static void push(LuaRef const& v)
-        {
-            v.push();
-        }
-        static LuaRef get(int index)
-        {
-            return LuaRef::fromIndex(index);
-        }
-    };
 
     template<typename R, typename... A>
     struct Stack<R(*)(A...)> : LuaObj
@@ -613,26 +649,6 @@ namespace tlua
         }
     };
 
-    template<typename R, typename... A>
-    struct Stack<function<R(A...)>> : LuaObj
-    {
-        static void push(const function<R(A...)>& f)
-        {
-            using F = function<R(A...)>;
-            new (lua_newuserdata(L, sizeof(F))) F(f);
-            lua_pushcclosure(L, [](lua_State* L) {
-                auto& f = *(F*)lua_touserdata(L, lua_upvalueindex(1));
-                return FuncHelper::callCpp<R, A...>(1, f);
-            }, 1);
-        }
-        static function<R(A...)> get(int idx)
-        {
-            auto& f = LuaRef::fromIndex(idx);
-            return [=](A&&... a) {
-                return (R)f.call(forward<A>(a)...);
-            };
-        }
-    };
 
     // lambda
     template<typename T>

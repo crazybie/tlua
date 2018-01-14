@@ -24,15 +24,38 @@ namespace tlua
 
         //lua_gc(L, LUA_GCSETSTEPMUL, 1);
 
-        for (auto i : getRegisters()) {
-            i.second();
-        }
         logError = [](const string& err) {
-            fprintf(stderr, "%s\n", err.c_str());
+            fprintf(stderr, "LUA ERROR: %s\n", err.c_str());
         };
         fileLoader = loadFile;
 
-        wrapClasses();
+        auto setupType = doString(R"(
+            return function(className)
+                local class = _G[className]
+                if class._lifetime ~= 'cpp' then
+                    class.__gc = class.Delete
+                end
+                class._name = className
+                class.__index = class                
+
+                local classMt = {}
+                if class.New then
+                    classMt.__call = function(class, ...)
+                        return class.New(...)
+                    end
+                end
+                if class.base then
+                    local baseName = class.base
+                    class.base = _G[baseName]
+                    assert(class.base, 'base class not exported:'..baseName)
+                    classMt.__index = class.base
+                end
+                setmetatable(class, classMt)
+            end                            
+        )");
+
+        for (auto i : getRegisters()) { i.second();}
+        for (auto i : getRegisters()) { setupType.call(i.first); }
     }
 
     void LuaMgr::setSourceRoot(string luaRoot /*= ""*/)
@@ -40,33 +63,10 @@ namespace tlua
         srcDir = luaRoot;
     }
 
-    void LuaMgr::wrapClasses()
-    {
-        auto wrap = doString(R"(
-            return function(className)
-                local class = _G[className]
-                local mt = {}
-                if class.New then
-                    mt.__call = function(class, ...)
-                        return class.New(...)
-                    end
-                end
-                if class.base then
-                    class.base = _G[class.base]
-                    mt.__index = class.base
-                end
-                class.__index = class
-                setmetatable(class, mt)
-            end                            
-        )");
-        for (auto i : getRegisters()) {
-            wrap.call(i.first.c_str());
-        }
-    }
-
     LuaMgr::~LuaMgr()
     {
-        lua_close(L);        
+        lua_close(L);    
+        L = nullptr;
     }
 
     std::map<std::string, tlua::LuaMgr::Register>& LuaMgr::getRegisters()
