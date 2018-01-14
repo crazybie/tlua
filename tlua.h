@@ -178,6 +178,7 @@ namespace tlua
             auto numArgs = lua_gettop(L);
             if (numArgs < expectedNumArgs)
                 throw std::runtime_error(Sprintf("Invalid arguments count: expect: %d, got %d", expectedNumArgs, numArgs));
+
             return f(Stack<A>::get(argsOffset + index)...);
         }
     };
