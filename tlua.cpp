@@ -40,11 +40,13 @@ namespace tlua
                 
                 local o = {}
                 for k,v in pairs(class) do
-                    local p = string.split(k, '([^#]+)')
-                    if #p > 1 then
-                        local name, argcnt = p[1], tonumber(p[2])
-                        o[name] = o[name] or {}
-                        table.insert(o[name], argcnt)
+                    if type(v)=='function' then
+                        local p = string.split(k, '([^#]+)')
+                        if #p > 1 then
+                            local name, argcnt = p[1], tonumber(p[2])
+                            o[name] = o[name] or {}
+                            table.insert(o[name], argcnt)
+                        end
                     end
                 end
                 for k,v in pairs(o) do
@@ -66,7 +68,8 @@ namespace tlua
                     class.__gc = class.Delete
                 end
                 class._name = typeName
-                class.__index = class                
+                class.__index = class
+                setupOverloads(class)
 
                 local classMt = {}
                 if class.New then
@@ -81,7 +84,7 @@ namespace tlua
                     classMt.__index = class.base
                 end
 
-                setupOverloads(class)
+                
                 setmetatable(class, classMt)
             end
               

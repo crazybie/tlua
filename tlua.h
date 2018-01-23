@@ -24,14 +24,14 @@
         funcs \
     }});
 
-
-#define _TLuaTypeBase(base)                         table["base"] = #base;
-#define TLuaFieldValue(name, val)                   table[#name] = val;
-#define TLuaField(name)                             table[#name] = Class::name;
-#define TLuaTypeInherit(name, base, funcs)          TLuaType(name, funcs _TLuaTypeBase(base) )
-#define TLuaConstructor(...)                        table["New"] = &tlua::Construct<Class, ##__VA_ARGS__>; table["Delete"] = &tlua::Destruct<Class>;
-#define TLuaFunc(name)                              table[#name] = &Class::name;
-#define TLuaFuncOverload(name, numArgs, args, body) table[#name "#" #numArgs] = [] args { return body; };
+#define _TLuaTypeBase(base)                             table["base"] = #base;
+#define TLuaFieldValue(name, val)                       table[#name] = val;
+#define TLuaField(name)                                 table[#name] = Class::name;
+#define TLuaTypeInherit(name, base, funcs)              TLuaType(name, funcs _TLuaTypeBase(base) )
+#define TLuaConstructor(...)                            table["New"] = &tlua::Construct<Class, ##__VA_ARGS__>;
+#define TLuaConstructorOverload(numArgs, args, body)    table["New#" #numArgs] = [] args { return new Class body; };
+#define TLuaFunc(name)                                  table[#name] = &Class::name;
+#define TLuaFuncOverload(name, numArgs, args, body)     table[#name "#" #numArgs] = [] args { return body; };
 
 
 
@@ -132,7 +132,7 @@ namespace tlua
         {
             return Imp::get(index);
         }
-        static void push(T&& r)
+        static void push(T r)
         {
             Imp::push(forward<T>(r));
         }
@@ -221,10 +221,10 @@ namespace tlua
         }
 
         template <class T>
-        void append(T&& v) const
+        void append(T&& v)
         {
             push();
-            Stack <T>::push(forward<T>(v));
+            Stack<T>::push(forward<T>(v));
             luaL_ref(L, -2);
             lua_pop(L, 1);
         }
@@ -345,6 +345,7 @@ namespace tlua
         {
             auto& r = newTable();
             typeNames<T>() = name;
+            r["Delete"] = &Destruct<T>;
             setGlobal(name, r);
             return r;
         }
@@ -368,6 +369,7 @@ namespace tlua
     template <class T>
     struct Stack <T&> : Stack<T>
     {};
+
 
     template <class T>
     struct Stack <const T> : Stack<T>
