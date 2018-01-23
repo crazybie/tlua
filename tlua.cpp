@@ -28,14 +28,44 @@ namespace tlua
             fprintf(stderr, "LUA ERROR: %s\n", err.c_str());
         };
         fileLoader = loadFile;
-
+        
         auto setupType = doString(R"(
-            return function(className)
-                local class = _G[className]
+            function string.split(s, p)
+                local r = {}                
+                string.gsub(s, p, function(c) r[#r+1] = c end)
+                return r
+            end
+
+            local function setupOverloads(class) 
+                
+                local o = {}
+                for k,v in pairs(class) do
+                    local p = string.split(k, '([^#]+)')
+                    if #p > 1 then
+                        local name, argcnt = p[1], tonumber(p[2])
+                        o[name] = o[name] or {}
+                        table.insert(o[name], argcnt)
+                    end
+                end
+                for k,v in pairs(o) do
+                    class[k] = function(...)
+                        local nargs = select('#',...)
+                        for _, needArgs in ipairs(v) do 
+                            if nargs == needArgs then
+                                return class[k..'#'..nargs](...)
+                            end
+                        end
+                        error('invalid arguments count')
+                    end
+                end
+            end
+
+            local function setupType(typeName)
+                local class = _G[typeName]
                 if class._lifetime ~= 'cpp' then
                     class.__gc = class.Delete
                 end
-                class._name = className
+                class._name = typeName
                 class.__index = class                
 
                 local classMt = {}
@@ -50,8 +80,12 @@ namespace tlua
                     assert(class.base, 'base class not exported:'..baseName)
                     classMt.__index = class.base
                 end
+
+                setupOverloads(class)
                 setmetatable(class, classMt)
-            end                            
+            end
+              
+            return setupType 
         )");
 
         for (auto i : getRegisters()) { i.second();}

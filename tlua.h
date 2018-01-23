@@ -24,13 +24,15 @@
         funcs \
     }});
 
-#define _TLuaTypeBase(base)                     table["base"] = #base;
-#define TLuaFieldValue(name, val)               table[#name] = val;
-#define TLuaTypeInherit(name, base, funcs)      TLuaType(name, funcs _TLuaTypeBase(base) )
-#define TLuaConstructor(...)                    table["New"] = &tlua::Construct<Class,__VA_ARGS__>; table["Delete"] = &tlua::Destruct<Class>;
-#define TLuaFunc(name)                          table[#name] = &Class::name;
-#define TLuaFuncOverload(name, newName, type)   table[#newName] = type &Class::name;
-#define TLuaField(name)                         table[#name] = Class::name;
+
+#define _TLuaTypeBase(base)                         table["base"] = #base;
+#define TLuaFieldValue(name, val)                   table[#name] = val;
+#define TLuaField(name)                             table[#name] = Class::name;
+#define TLuaTypeInherit(name, base, funcs)          TLuaType(name, funcs _TLuaTypeBase(base) )
+#define TLuaConstructor(...)                        table["New"] = &tlua::Construct<Class, ##__VA_ARGS__>; table["Delete"] = &tlua::Destruct<Class>;
+#define TLuaFunc(name)                              table[#name] = &Class::name;
+#define TLuaFuncOverload(name, numArgs, args, body) table[#name "#" #numArgs] = [] args { return body; };
+
 
 
 namespace tlua
@@ -39,10 +41,12 @@ namespace tlua
 
     namespace helpers
     {
+#ifdef TLUA_CPP11
         // c++14 index_sequence in c++11
         template<size_t...>					struct index_sequence {};
         template<size_t N, size_t... Is>	struct make_index_sequence : make_index_sequence<N - 1, N - 1, Is...> {};
         template<size_t... Is>				struct make_index_sequence<0, Is...> : index_sequence<Is...> {};
+#endif
 
         //////////////////////////////////////////////////////////////////////////
 
