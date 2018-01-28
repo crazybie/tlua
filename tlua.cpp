@@ -158,9 +158,14 @@ namespace tlua
 
     void LuaMgr::traceback(const char* msg)
     {
-        auto ignoreFuncStackCnt = 2;// debug.traceback + __traceback
+        auto ignoreFuncStackCnt = 2;// debug.traceback + __traceback        
+        instance->logError(instance->getCallStack(msg, ignoreFuncStackCnt));
+    }
+
+    const char* LuaMgr::getCallStack(const char* msg, int ignoreFuncStackCnt) 
+    {
         auto stack = instance->getGlobal("debug")["traceback"].call<const char*>(msg, ignoreFuncStackCnt);
-        instance->logError(stack);
+        return stack;
     }
 
     int LuaMgr::luaLoader(lua_State* L)

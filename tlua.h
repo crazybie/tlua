@@ -315,17 +315,20 @@ namespace tlua
     {
     public:
         typedef void(*Register)();
+        static LuaMgr* get() { return instance; }
+        static std::map<string, Register>& getRegisters();
+
+        function<void(const char*)> logError;
+        function<string(const char*)> fileLoader;
 
         LuaMgr();
         virtual ~LuaMgr();
-        static LuaMgr* get() { return instance; }
-
         void setSourceRoot(string luaRoot = "");
-        static std::map<string, Register>& getRegisters();
         LuaRef doFile(const char *name);
         LuaRef doString(const char* name);
         LuaRef newTable();
         LuaRef getGlobal(const char* name);
+        const char* getCallStack(const char* msg, int ignoreFuncStackCnt = 1);
 
         template<typename T>
         void setGlobal(const char* name, T&& t)
@@ -349,9 +352,6 @@ namespace tlua
             setGlobal(name, r);
             return r;
         }
-
-        function<void(const char*)> logError;
-        function<string(const char*)> fileLoader;
 
     private:
         static string loadFile(const char* name);
@@ -596,12 +596,6 @@ namespace tlua
         void* ptr;
     };
 
-    template<typename T>
-    struct UserDataValue : UserData
-    {
-        char buffer[sizeof(T)];
-    };
-
     // general value type
     template<typename T>
     struct StackHelper<T, false, false> : LuaObj
@@ -612,9 +606,8 @@ namespace tlua
         }
         static void push(const T& r)
         {
-            auto* p = (UserDataValue<T>*)lua_newuserdata(L, sizeof(UserDataValue<T>));
-            p->ptr = p->buffer;
-            new (p->ptr) T(r);
+            auto* p = (UserData*)lua_newuserdata(L, sizeof(UserData));
+            p->ptr = new T(r);
             Stack<T*>::setMetatable();
         }
     };
