@@ -25,12 +25,14 @@
     }});
 
 #define _TLuaTypeBase(base)                             table["base"] = #base;
+#define TLuaTypeInherit(name, base, funcs)              TLuaType(name, funcs _TLuaTypeBase(base) )
+
 #define TLuaFieldValue(name, val)                       table[#name] = val;
 #define TLuaField(name)                                 table[#name] = Class::name;
-#define TLuaTypeInherit(name, base, funcs)              TLuaType(name, funcs _TLuaTypeBase(base) )
+#define TLuaFieldAddr(name)                             table[#name] = &Class::name;
+
 #define TLuaConstructor(...)                            table["New"] = &tlua::Construct<Class, ##__VA_ARGS__>;
 #define TLuaConstructorOverload(numArgs, args, body)    table["New#" #numArgs] = [] args { return new Class body; };
-#define TLuaFunc(name)                                  table[#name] = &Class::name;
 #define TLuaFuncOverload(name, numArgs, args, body)     table[#name "#" #numArgs] = [] args { return body; };
 
 
@@ -249,7 +251,7 @@ namespace tlua
             PopOnExit p;
             lua_rawgeti(L, LUA_REGISTRYINDEX, m_tableRef);
             lua_rawgeti(L, LUA_REGISTRYINDEX, m_ref);
-            Stack <T>::push(forward<T>(v));
+            Stack<T>::push(forward<T>(v));
             lua_rawset(L, -3);
             return *this;
         }
@@ -634,7 +636,6 @@ namespace tlua
         }
     };
 
-
     template<typename R, typename... A>
     struct Stack<R(*)(A...)> : LuaObj
     {
@@ -661,6 +662,23 @@ namespace tlua
                 auto& f = *(T*)lua_touserdata(L, lua_upvalueindex(1));
                 using FT = function_traits<T>;
                 return FuncHelper::callCpp<FT::return_type>((FT::argument_tuple*)nullptr, 1, f);
+            }, 1);
+        }
+    };
+
+    template<typename T, typename C>
+    struct Stack<T C::*> : LuaObj
+    {
+        static void push(T C::*m)
+        {
+            using F = decltype(m);
+            *(F*)lua_newuserdata(L, sizeof(F)) = m;
+            lua_pushcclosure(L, [](lua_State* L) {
+                auto f = *(F*)lua_touserdata(L, lua_upvalueindex(1));
+                auto obj = Stack<C*>::get(1);
+                if (!obj) throw std::runtime_error("self is nil");
+                Stack<T>::push(obj->*f);
+                return 1;
             }, 1);
         }
     };
