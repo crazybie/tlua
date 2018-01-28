@@ -580,13 +580,17 @@ namespace tlua
             new (lua_newuserdata(L, sizeof(F))) F(f);
             lua_pushcclosure(L, [](lua_State* L) {
                 auto& f = *(F*)lua_touserdata(L, lua_upvalueindex(1));
+                if (!f) return 0;
                 return FuncHelper::callCpp<R, A...>(1, f);
             }, 1);
         }
         static function<R(A...)> get(int idx)
         {
             auto& f = LuaRef::fromIndex(idx);
-            return [=](A&&... a) { return f.call<R>(forward<A>(a)...); };
+            if (!f) return nullptr;
+            return [=](A&&... a) {                
+                return f.call<R>(forward<A>(a)...); 
+            };
         }
     };
 
