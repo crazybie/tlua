@@ -634,8 +634,10 @@ namespace tlua
         }
         static void setMetatable()
         {
-            lua_getglobal(L, LuaMgr::typeNames<T>().c_str());
-            assert(lua_istable(L, -1) && "type not registered");
+            auto* name = LuaMgr::typeNames<T>().c_str();
+            lua_getglobal(L, name);
+            if (!lua_istable(L, -1)) 
+                throw std::runtime_error(Sprintf("type not registered: %s", typeid(T).raw_name()));
             lua_setmetatable(L, -2);
         }
     };
