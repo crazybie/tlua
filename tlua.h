@@ -725,4 +725,8 @@ namespace tlua
         }
     };
 
+    template< typename R, typename C, typename... A>
+    struct Stack<R(C::*)( A... )const noexcept> : Stack<R(C::*)( A... )const>
+    {
+    };
 }
