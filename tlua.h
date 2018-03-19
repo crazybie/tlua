@@ -692,9 +692,9 @@ namespace tlua
     template< typename R, typename C, typename... A>
     struct Stack<R(C::*)(A...)> : LuaObj
     {
-        static void push(R(C::*f)(A...))
+        template<typename MF>
+        static void push(MF f)
         {
-            using MF = decltype(f);
             *(MF*)lua_newuserdata(L, sizeof(MF)) = f;
             lua_pushcclosure(L, [](lua_State* L) {
                 return FuncHelper::callCpp<R, A...>(2, [L](A&&... a) {
@@ -708,21 +708,8 @@ namespace tlua
     };
 
     template< typename R, typename C, typename... A>
-    struct Stack<R(C::*)(A...)const> : LuaObj
-    {
-        static void push(R(C::*f)(A...)const)
-        {
-            using MF = decltype(f);
-            *(MF*)lua_newuserdata(L, sizeof(MF)) = f;
-            lua_pushcclosure(L, [](lua_State* L) {
-                return FuncHelper::callCpp<R, A...>(2, [L](A&&... a) {
-                    auto f = *(MF*)lua_touserdata(L, lua_upvalueindex(1));
-                    auto obj = Stack<C*>::get(1);
-                    if (!obj) throw std::runtime_error("self is nil");
-                    return (obj->*f)(forward<A>(a)...);
-                });
-            }, 1);
-        }
+    struct Stack<R(C::*)(A...)const> : Stack<R(C::*)( A... )>
+    {        
     };
 
     template< typename R, typename C, typename... A>
