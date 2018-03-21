@@ -574,9 +574,9 @@ namespace tlua
     template<typename R, typename... A>
     struct Stack<function<R(A...)>> : LuaObj
     {
-        static void push(const function<R(A...)>& f)
-        {
-            using F = function<R(A...)>;
+        using F = function<R(A...)>;
+        static void push(const F& f)
+        {            
             new (lua_newuserdata(L, sizeof(F))) F(f);
             lua_pushcclosure(L, [](lua_State* L) {
                 auto& f = *(F*)lua_touserdata(L, lua_upvalueindex(1));
@@ -584,7 +584,7 @@ namespace tlua
                 return FuncHelper::callCpp<R, A...>(1, f);
             }, 1);
         }
-        static function<R(A...)> get(int idx)
+        static F get(int idx)
         {
             auto& f = LuaRef::fromIndex(idx);
             if (!f) return nullptr;
@@ -645,12 +645,12 @@ namespace tlua
     template<typename R, typename... A>
     struct Stack<R(*)(A...)> : LuaObj
     {
-        static void push(R(*f)(A...))
+        using F = R(*)( A... );
+        static void push(F f)
         {
-            using F = decltype(f);
-            *(F*)lua_newuserdata(L, sizeof(F)) = f;
+            lua_pushlightuserdata(L, f);
             lua_pushcclosure(L, [](lua_State* L) {
-                auto f = *(F*)lua_touserdata(L, lua_upvalueindex(1));
+                auto f = (F) lua_touserdata(L, lua_upvalueindex(1));
                 return FuncHelper::callCpp<R, A...>(1, f);
             }, 1);
         }
@@ -677,10 +677,9 @@ namespace tlua
     {
         static void push(T C::*m)
         {
-            using F = decltype(m);
-            *(F*)lua_newuserdata(L, sizeof(F)) = m;
+            lua_pushinteger(L, (int)m);
             lua_pushcclosure(L, [](lua_State* L) {
-                auto f = *(F*)lua_touserdata(L, lua_upvalueindex(1));
+                auto f = (decaltype(m))lua_tointeger(L, lua_upvalueindex(1));
                 auto obj = Stack<C*>::get(1);
                 if (!obj) throw std::runtime_error("self is nil");
                 Stack<T>::push(obj->*f);
