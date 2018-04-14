@@ -1,3 +1,4 @@
+#include "stdafx.h"
 #include "tlua.h"
 
 namespace tlua 
@@ -12,7 +13,10 @@ namespace tlua
         L = luaL_newstate();
 
         luaL_openlibs(L);
+        
+        #ifndef TLUA_NO_SOCKET
         luaopen_socket_core(L);
+        #endif
 
         LuaRef loaders = getGlobal("package")["loaders"];
         if (loaders.type() != LUA_TTABLE) {

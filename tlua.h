@@ -10,17 +10,19 @@
 #include <functional>
 #include <cassert>
 
-#ifndef NO_MINI_LUA
+#ifndef TLUA_NO_MINI_LUA
 #include "lua.h"
 #endif
 
+#ifndef TLUA_NO_SOCKET
 #include "luasocket.h"
+#endif
 
 
 #define TLuaType(Type, funcs) \
     static auto __reg_##Type = tlua::LuaMgr::getRegisters().insert({#Type, []{ \
         typedef Type Class; \
-        auto& table = tlua::LuaMgr::get()->newType<Type>(#Type); \
+        auto table = tlua::LuaMgr::get()->newType<Type>(#Type); \
         funcs \
     }});
 
@@ -182,7 +184,7 @@ namespace tlua
         {
             auto expectedNumArgs = sizeof...(A) + argsOffset - 1;
             auto numArgs = lua_gettop(L);
-            if (numArgs < expectedNumArgs)
+            if (numArgs < (int)expectedNumArgs)
                 throw std::runtime_error(Sprintf("Invalid arguments count: expect: %d, got %d", expectedNumArgs, numArgs));
 
             return f(Stack<A>::get(argsOffset + index)...);
@@ -348,7 +350,7 @@ namespace tlua
         template<typename T>
         LuaRef newType(const char* name) 
         {
-            auto& r = newTable();
+            auto r = newTable();
             typeNames<T>() = name;
             r["Delete"] = &Destruct<T>;
             setGlobal(name, r);
@@ -430,7 +432,7 @@ namespace tlua
         }
     };
 
-#ifndef TLUA_INT_AS_INTEGER
+#if defined(LUA_INT_TYPE) && LUA_INT_TYPE != LUA_INT_INT
 
     template <>
     struct Stack<int> : Stack<lua_Integer> {};
@@ -667,7 +669,7 @@ namespace tlua
             lua_pushcclosure(L, [](lua_State* L) {
                 auto& f = *(T*)lua_touserdata(L, lua_upvalueindex(1));
                 using FT = function_traits<T>;
-                return FuncHelper::callCpp<FT::return_type>((FT::argument_tuple*)nullptr, 1, f);
+                return FuncHelper::callCpp<typename FT::return_type>((typename FT::argument_tuple*)nullptr, 1, f);
             }, 1);
         }
     };
@@ -679,7 +681,7 @@ namespace tlua
         {
             lua_pushinteger(L, (int)m);
             lua_pushcclosure(L, [](lua_State* L) {
-                auto f = (decaltype(m))lua_tointeger(L, lua_upvalueindex(1));
+                auto f = (decltype(m))lua_tointeger(L, lua_upvalueindex(1));
                 auto obj = Stack<C*>::get(1);
                 if (!obj) throw std::runtime_error("self is nil");
                 Stack<T>::push(obj->*f);
