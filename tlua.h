@@ -45,7 +45,7 @@ namespace tlua
 
     namespace helpers
     {
-#ifdef TLUA_CPP11
+#if __cplusplus == 201103L
         // c++14 index_sequence in c++11
         template<size_t...>					struct index_sequence {};
         template<size_t N, size_t... Is>	struct make_index_sequence : make_index_sequence<N - 1, N - 1, Is...> {};
