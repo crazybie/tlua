@@ -57,7 +57,7 @@ namespace tlua
         template <typename T>
         struct is_functor
         {
-            template <typename U> static char deduce(decltype(&U::operator())*);
+            template <typename U> static char deduce(decltype( &U::operator() )*);
             template <typename U> static int deduce(...);
 
             static constexpr bool value = sizeof(deduce<T>(0)) == 1;
@@ -66,11 +66,11 @@ namespace tlua
         //////////////////////////////////////////////////////////////////////////
 
         template <typename T>
-        struct function_traits : function_traits<decltype(&T::operator())>
+        struct function_traits : function_traits<decltype( &T::operator() )>
         {};
 
         template<class C, class R, class... Args>
-        struct function_traits<R(C::*)(Args...)const>
+        struct function_traits<R(C::*)( Args... )const>
         {
             using return_type = R;
             using argument_tuple = std::tuple<Args...>;
@@ -94,7 +94,7 @@ namespace tlua
         void Destruct(T* d) { delete d; }
 
         template<typename... A>
-        string Sprintf(const char* fmt, A&&... args) 
+        string Sprintf(const char* fmt, A&&... args)
         {
             char buf[255];
             sprintf_s(buf, fmt, forward<A>(args)...);
@@ -156,13 +156,11 @@ namespace tlua
         static int callCpp(int argsOffset, F&& f)
         {
             try {
-                Stack<R>::push((callCpp<R, A...>(argsOffset, forward<F>(f), make_index_sequence<sizeof...(A)>()), Nil()));
+                Stack<R>::push(( callCpp<R, A...>(argsOffset, forward<F>(f), make_index_sequence<sizeof...( A )>()), Nil() ));
                 return std::is_same<R, void>::value ? 0 : 1;
-            }
-            catch (std::exception &e) {
+            } catch ( std::exception &e ) {
                 luaL_error(L, "C++ exception: %s", e.what());
-            }
-            catch (...) {
+            } catch ( ... ) {
                 luaL_error(L, "C++ exception: unknown");
             }
             return 0;
@@ -173,8 +171,8 @@ namespace tlua
             PopOnExit t;
             lua_getglobal(L, "__traceback");
             lua_insert(L, -2);
-            std::initializer_list<char> ordered = { (Stack<A>::push(forward<A>(a)),0)... };
-            int nargs = sizeof...(A);
+            std::initializer_list<char> ordered = { ( Stack<A>::push(forward<A>(a)),0 )... };
+            int nargs = sizeof...( A );
             lua_pcall(L, nargs, 1, -nargs - 2);
             return Stack<R>::get(-1);
         }
@@ -182,9 +180,9 @@ namespace tlua
         template<typename R, typename... A, typename F, size_t... index>
         static R callCpp(int argsOffset, F&& f, index_sequence<index...>)
         {
-            auto expectedNumArgs = sizeof...(A) + argsOffset - 1;
+            auto expectedNumArgs = sizeof...(A)+argsOffset - 1;
             auto numArgs = lua_gettop(L);
-            if (numArgs < (int)expectedNumArgs)
+            if ( numArgs < (int)expectedNumArgs )
                 throw std::runtime_error(Sprintf("Invalid arguments count: expect: %d, got %d", expectedNumArgs, numArgs));
 
             return f(Stack<A>::get(argsOffset + index)...);
@@ -318,7 +316,7 @@ namespace tlua
     class LuaMgr : public LuaObj
     {
     public:
-        typedef void(*Register)();
+        typedef void(*Register)( );
         static LuaMgr* get() { return instance; }
         static std::map<string, Register>& getRegisters();
 
@@ -342,13 +340,13 @@ namespace tlua
         }
 
         template<typename T>
-        static string& typeNames() 
+        static string& typeNames()
         {
             static string s;
             return s;
         }
         template<typename T>
-        LuaRef newType(const char* name) 
+        LuaRef newType(const char* name)
         {
             auto r = newTable();
             typeNames<T>() = name;
@@ -525,14 +523,14 @@ namespace tlua
     {
         static void push(initializer_list<T>& l)
         {
-            for (auto& i : i) Stack<T>::push(i);
+            for ( auto& i : i ) Stack<T>::push(i);
         }
         static initializer_list<T> get(int index)
         {
             const LuaRef& tb = LuaRef::fromIndex(index);
             static std::vector<T> v; // TODO
             v.clear();
-            for (auto& i : tb) v.emplace_back((T)i.second);
+            for ( auto& i : tb ) v.emplace_back((T)i.second);
             return initializer_list<T>(&v.front(), &v.back() + 1);
         }
     };
@@ -543,14 +541,14 @@ namespace tlua
         static void push(const std::vector<T>& v)
         {
             auto& tb = LuaMgr::get()->newTable();
-            for (auto& i : v) tb.append(i);
+            for ( auto& i : v ) tb.append(i);
             tb.push();
         }
         static std::vector<T> get(int index)
         {
             const LuaRef& tb = LuaRef::fromIndex(index);
             std::vector<T> v;
-            for (auto& i : tb) v.emplace_back((T)i.second);
+            for ( auto& i : tb ) v.emplace_back((T)i.second);
             return v;
         }
     };
@@ -561,14 +559,14 @@ namespace tlua
         static void push(const std::map<K, V>& v)
         {
             auto& tb = LuaMgr::get()->newTable();
-            for (auto& i : v) tb[i.first] = i.second;
+            for ( auto& i : v ) tb[i.first] = i.second;
             tb.push();
         }
         static std::map<K, V> get(int index)
         {
             const LuaRef& tb = LuaRef::fromIndex(index);
             std::map<K, V> v;
-            for (auto& i : tb) v[(K)i.first] = std::move((V)i.second);
+            for ( auto& i : tb ) v[(K)i.first] = std::move((V)i.second);
             return v;
         }
     };
@@ -578,20 +576,20 @@ namespace tlua
     {
         using F = function<R(A...)>;
         static void push(const F& f)
-        {            
-            new (lua_newuserdata(L, sizeof(F))) F(f);
+        {
+            new ( lua_newuserdata(L, sizeof(F)) ) F(f);
             lua_pushcclosure(L, [](lua_State* L) {
                 auto& f = *(F*)lua_touserdata(L, lua_upvalueindex(1));
-                if (!f) return 0;
+                if ( !f ) return 0;
                 return FuncHelper::callCpp<R, A...>(1, f);
             }, 1);
         }
         static F get(int idx)
         {
             auto& f = LuaRef::fromIndex(idx);
-            if (!f) return nullptr;
-            return [=](A&&... a) {                
-                return f.call<R>(forward<A>(a)...); 
+            if ( !f ) return nullptr;
+            return [=](A&&... a) {
+                return f.call<R>(forward<A>(a)...);
             };
         }
     };
@@ -599,7 +597,7 @@ namespace tlua
     //////////////////////////////////////////////////////////////////////////
     // user types
 
-    struct UserData 
+    struct UserData
     {
         void* ptr;
     };
@@ -625,7 +623,7 @@ namespace tlua
     {
         static T* get(int index)
         {
-            auto p = static_cast<UserData*>(lua_touserdata(L, index));
+            auto p = static_cast<UserData*>( lua_touserdata(L, index) );
             return p && p->ptr ? (T*)p->ptr : nullptr;
         }
         static void push(T* r)
@@ -638,21 +636,21 @@ namespace tlua
         {
             auto* name = LuaMgr::typeNames<T>().c_str();
             lua_getglobal(L, name);
-            if (!lua_istable(L, -1)) 
-                throw std::runtime_error(Sprintf("type not registered: %s", typeid(T).raw_name()));
+            if ( !lua_istable(L, -1) )
+                throw std::runtime_error(Sprintf("type not registered: %s", typeid( T ).raw_name()));
             lua_setmetatable(L, -2);
         }
     };
 
     template<typename R, typename... A>
-    struct Stack<R(*)(A...)> : LuaObj
+    struct Stack<R(*)( A... )> : LuaObj
     {
         using F = R(*)( A... );
         static void push(F f)
         {
             lua_pushlightuserdata(L, f);
             lua_pushcclosure(L, [](lua_State* L) {
-                auto f = (F) lua_touserdata(L, lua_upvalueindex(1));
+                auto f = (F)lua_touserdata(L, lua_upvalueindex(1));
                 return FuncHelper::callCpp<R, A...>(1, f);
             }, 1);
         }
@@ -665,11 +663,11 @@ namespace tlua
     {
         static void push(T&& f)
         {
-            new (lua_newuserdata(L, sizeof(T))) T(move(f));
+            new ( lua_newuserdata(L, sizeof(T)) ) T(move(f));
             lua_pushcclosure(L, [](lua_State* L) {
                 auto& f = *(T*)lua_touserdata(L, lua_upvalueindex(1));
                 using FT = function_traits<T>;
-                return FuncHelper::callCpp<typename FT::return_type>((typename FT::argument_tuple*)nullptr, 1, f);
+                return FuncHelper::callCpp<typename FT::return_type>(( typename FT::argument_tuple* )nullptr, 1, f);
             }, 1);
         }
     };
@@ -681,9 +679,9 @@ namespace tlua
         {
             lua_pushinteger(L, (int)m);
             lua_pushcclosure(L, [](lua_State* L) {
-                auto f = (decltype(m))lua_tointeger(L, lua_upvalueindex(1));
+                auto f = (decltype( m ))lua_tointeger(L, lua_upvalueindex(1));
                 auto obj = Stack<C*>::get(1);
-                if (!obj) throw std::runtime_error("self is nil");
+                if ( !obj ) throw std::runtime_error("self is nil");
                 Stack<T>::push(obj->*f);
                 return 1;
             }, 1);
@@ -691,7 +689,7 @@ namespace tlua
     };
 
     template< typename R, typename C, typename... A>
-    struct Stack<R(C::*)(A...)> : LuaObj
+    struct Stack<R(C::*)( A... )> : LuaObj
     {
         template<typename MF>
         static void push(MF f)
@@ -701,20 +699,18 @@ namespace tlua
                 return FuncHelper::callCpp<R, A...>(2, [L](A&&... a) {
                     auto f = *(MF*)lua_touserdata(L, lua_upvalueindex(1));
                     auto obj = Stack<C*>::get(1);
-                    if (!obj) throw std::runtime_error("self is nil");
-                    return (obj->*f)(forward<A>(a)...);
+                    if ( !obj ) throw std::runtime_error("self is nil");
+                    return ( obj->*f )( forward<A>(a)... );
                 });
             }, 1);
         }
     };
 
     template< typename R, typename C, typename... A>
-    struct Stack<R(C::*)(A...)const> : Stack<R(C::*)( A... )>
-    {        
-    };
+    struct Stack<R(C::*)( A... )const> : Stack<R(C::*)( A... )>
+    {};
 
     template< typename R, typename C, typename... A>
     struct Stack<R(C::*)( A... )const noexcept> : Stack<R(C::*)( A... )const>
-    {
-    };
+    {};
 }
