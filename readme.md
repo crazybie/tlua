@@ -65,6 +65,6 @@ int main() {
 
 ### License
 
-TLUA (the binding utility): [The MIT License](https://github.com/crazybie/tlua/blob/master/LICENSE)
-[Lua](https://www.lua.org/license.html)
-[LuaSocket](https://github.com/diegonehab/luasocket/blob/master/LICENSE)
+- TLUA (the binding utility): [The MIT License](https://github.com/crazybie/tlua/blob/master/LICENSE)
+- [Lua](https://www.lua.org/license.html)
+- [LuaSocket](https://github.com/diegonehab/luasocket/blob/master/LICENSE)
