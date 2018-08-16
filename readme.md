@@ -5,7 +5,7 @@ tlua(binding utility) + packed lua(optional) + luasocket(optional)
 
 # Hightlights
 
-- tiny lua binding utility in one header file(expired by LuaBridge)
+- tiny lua binding utility in one header file(inspired by [LuaBridge](https://github.com/vinniefalco/LuaBridge))
 - official lua5.3 packed in 1 h&cpp files.
 - luasocket for remote debuging packed in 1 h&cpp files.
 - no other dependencies
@@ -13,11 +13,11 @@ tlua(binding utility) + packed lua(optional) + luasocket(optional)
 
 # Binding features:
 
-- support most stl containers.
-- support binding enum and lambda.
-- support using stl function to call lua and vice versa.
-- access lua tables with std::map like syntax(can chain).
-- support overloaded C++ functions
+- support most **stl containers**.
+- support binding **enum** and **lambda**.
+- support using **std::function** to call lua and vice versa.
+- access lua tables with **std::map** like syntax(**can chain**).
+- support **overloaded** C++ functions
 - very simple binding syntax.
 
 example:
