@@ -35,13 +35,14 @@
 
 #define TLuaConstructor(...)                            table["New"] = &tlua::Construct<Class, ##__VA_ARGS__>;
 #define TLuaConstructorOverload(numArgs, args, body)    table["New#" #numArgs] = [] args { return new Class body; };
+//#define TLuaFuncOverload(name, numArgs, args, body)     table[#name "#" #numArgs] = [] args { return body; };
+
 #define TLuaFuncOverload(name, args, body)     table[#name "#" TLua_ToStr(TLua_NARGS(args))] = [] args { return body; };
 
 #define  TLua_ToStr(s) #s
 
 #define TLua_NARGS(...) TLua___NARGS(0, ## __VA_ARGS__, 5,4,3,2,1,0)
 #define TLua___NARGS(_0,_1,_2,_3,_4,_5,N,...) N
-
 
 namespace tlua
 {
@@ -714,11 +715,9 @@ namespace tlua
 
 	template< typename R, typename C, typename... A>
 	struct Stack<R(C::*)(A...)const> : Stack<R(C::*)(A...)>
-	{
-	};
+	{};
 
 	template< typename R, typename C, typename... A>
 	struct Stack<R(C::*)(A...)const noexcept> : Stack<R(C::*)(A...)const>
-	{
-	};
+	{};
 }

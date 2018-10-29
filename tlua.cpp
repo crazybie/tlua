@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "tlua.h"
 
-namespace tlua 
+namespace tlua
 {
     LuaMgr* LuaMgr::instance = nullptr;
     lua_State* LuaObj::L = nullptr;
@@ -13,13 +13,13 @@ namespace tlua
         L = luaL_newstate();
 
         luaL_openlibs(L);
-        
-        #ifndef TLUA_NO_SOCKET
+
+#ifndef TLUA_NO_SOCKET
         luaopen_socket_core(L);
-        #endif
+#endif
 
         LuaRef loaders = getGlobal("package")["loaders"];
-        if (loaders.type() != LUA_TTABLE) {
+        if ( loaders.type() != LUA_TTABLE ) {
             loaders = (LuaRef)getGlobal("package")["searchers"];
         }
         loaders.append(&luaLoader);
@@ -32,7 +32,7 @@ namespace tlua
             fprintf(stderr, "LUA ERROR: %s\n", err.c_str());
         };
         fileLoader = loadFile;
-        
+
         auto setupType = doString(R"(
             function string.split(s, p)
                 local r = {}                
@@ -41,7 +41,6 @@ namespace tlua
             end
 
             local function setupOverloads(class) 
-                
                 local o = {}
                 for k,v in pairs(class) do
                     if type(v)=='function' then
@@ -87,7 +86,6 @@ namespace tlua
                     assert(class.base, 'base class not exported:'..baseName)
                     classMt.__index = class.base
                 end
-
                 
                 setmetatable(class, classMt)
             end
@@ -95,8 +93,8 @@ namespace tlua
             return setupType 
         )");
 
-        for (auto i : getRegisters()) { i.second();}
-        for (auto i : getRegisters()) { setupType.call(i.first); }
+        for ( auto i : getRegisters() ) { i.second(); }
+        for ( auto i : getRegisters() ) { setupType.call(i.first); }
     }
 
     void LuaMgr::setSourceRoot(string luaRoot /*= ""*/)
@@ -106,7 +104,7 @@ namespace tlua
 
     LuaMgr::~LuaMgr()
     {
-        lua_close(L);    
+        lua_close(L);
         L = nullptr;
     }
 
@@ -119,7 +117,7 @@ namespace tlua
     tlua::LuaRef LuaMgr::doFile(const char *name)
     {
         auto cmd = string("return require('") + name + "')";
-        if (luaL_loadstring(L, cmd.c_str())) {
+        if ( luaL_loadstring(L, cmd.c_str()) ) {
             logError(lua_tostring(L, -1));
             return LuaRef();
         }
@@ -128,7 +126,7 @@ namespace tlua
 
     tlua::LuaRef LuaMgr::doString(const char* name)
     {
-        if (luaL_loadstring(L, name)) {
+        if ( luaL_loadstring(L, name) ) {
             logError(lua_tostring(L, -1));
             return LuaRef();
         }
@@ -150,7 +148,7 @@ namespace tlua
     std::string LuaMgr::loadFile(const char* name)
     {
         string ret;
-        if (FILE* f = fopen(name, "rb")) {
+        if ( FILE* f = fopen(name, "rb") ) {
             fseek(f, 0, SEEK_END);
             ret.resize(ftell(f));
             fseek(f, 0, SEEK_SET);
@@ -166,7 +164,7 @@ namespace tlua
         instance->logError(instance->getCallStack(msg, ignoreFuncStackCnt));
     }
 
-    const char* LuaMgr::getCallStack(const char* msg, int ignoreFuncStackCnt) 
+    const char* LuaMgr::getCallStack(const char* msg, int ignoreFuncStackCnt)
     {
         auto stack = instance->getGlobal("debug")["traceback"].call<const char*>(msg, ignoreFuncStackCnt);
         return stack;
@@ -175,16 +173,16 @@ namespace tlua
     int LuaMgr::luaLoader(lua_State* L)
     {
         string requireFile = lua_tostring(L, -1);
-        while (auto c = strchr(&requireFile[0], '.')) *c = '/';
+        while ( auto c = strchr(&requireFile[0], '.') ) *c = '/';
         requireFile += ".lua";
         auto filePath = instance->srcDir + "/" + requireFile;
         auto chunk = instance->loadFile(filePath.c_str());
-        if (chunk.size() == 0) {
+        if ( chunk.size() == 0 ) {
             instance->logError(Sprintf("can not get file data of %s", filePath.c_str()).c_str());
             return 0;
         }
         auto err = luaL_loadbuffer(L, chunk.data(), chunk.size(), requireFile.c_str());
-        if (err == LUA_ERRSYNTAX) {
+        if ( err == LUA_ERRSYNTAX ) {
             instance->logError(Sprintf("syntax error in %s", filePath.c_str()).c_str());
             return 0;
         }
@@ -198,7 +196,7 @@ namespace tlua
 
     LuaRefBase::~LuaRefBase()
     {
-        if (m_ref != LUA_REFNIL && L)
+        if ( m_ref != LUA_REFNIL && L )
             luaL_unref(L, LUA_REGISTRYINDEX, m_ref);
     }
 
@@ -209,7 +207,7 @@ namespace tlua
 
     int LuaRefBase::type() const
     {
-        if (m_ref == LUA_REFNIL) return LUA_TNIL;
+        if ( m_ref == LUA_REFNIL ) return LUA_TNIL;
         PopOnExit p;
         push();
         return lua_type(L, -1);
@@ -217,7 +215,7 @@ namespace tlua
 
     int LuaRefBase::createRef() const
     {
-        if (m_ref == LUA_REFNIL) return LUA_REFNIL;
+        if ( m_ref == LUA_REFNIL ) return LUA_REFNIL;
         push();
         return luaL_ref(L, LUA_REGISTRYINDEX);
     }
@@ -319,18 +317,18 @@ namespace tlua
 
     tlua::Iterator& Iterator::operator++()
     {
-        if (valid) next();
+        if ( valid ) next();
         return *this;
     }
 
     bool Iterator::operator!=(const Iterator& r) const
     {
-        return !(*this == r);
+        return !( *this == r );
     }
 
     bool Iterator::operator==(const Iterator& r) const
     {
-        if (!valid && !r.valid) return true;
+        if ( !valid && !r.valid ) return true;
         return false;
     }
 
@@ -344,7 +342,7 @@ namespace tlua
         m_table.push();
         m_key.push();
         valid = false;
-        if (lua_next(L, -2)) {
+        if ( lua_next(L, -2) ) {
             valid = true;
             m_value.pop();
             m_key.pop();
