@@ -50,15 +50,15 @@
 #ifdef _MSC_VER
 
 #define _TLua_EXPAND(x) x
-#define _TLua___NARGS(_1, _2, _3, _4, _5, VAL, ...) VAL
-#define _TLua_NARGS_1(...) _TLua_EXPAND(_TLua___NARGS(__VA_ARGS__, 4, 3, 2, 1, 0))
+#define _TLua___NARGS(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, VAL, ...) VAL
+#define _TLua_NARGS_1(...) _TLua_EXPAND(_TLua___NARGS(__VA_ARGS__, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0))
 #define _TLua_AUGMENTER(...) unused, __VA_ARGS__
 #define _TLua_NARGS(...) _TLua_NARGS_1(_TLua_AUGMENTER(__VA_ARGS__))
 
 #else
 
-#define _TLua_NARGS(...) _TLua___NARGS(0, ## __VA_ARGS__, 5,4,3,2,1,0)
-#define _TLua___NARGS(_0,_1,_2,_3,_4,_5,N,...) N
+#define _TLua_NARGS(...) _TLua___NARGS(0, ## __VA_ARGS__, 10,9,8,7,6,5,4,3,2,1,0)
+#define _TLua___NARGS(_0,_1,_2,_3,_4,_5,_6,_7,_8,_9,_10,N,...) N
 
 #endif
 
