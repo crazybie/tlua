@@ -34,15 +34,38 @@
 #define TLuaFieldAddr(name)                             table[#name] = &Class::name;
 
 #define TLuaConstructor(...)                            table["New"] = &tlua::Construct<Class, ##__VA_ARGS__>;
-#define TLuaConstructorOverload(numArgs, args, body)    table["New#" #numArgs] = [] args { return new Class body; };
-//#define TLuaFuncOverload(name, numArgs, args, body)     table[#name "#" #numArgs] = [] args { return body; };
+#define TLuaConstructorOverload(args, body)				table[_TLua_OverloadName(New, args)] = [] args { return new Class body; };
 
-#define TLuaFuncOverload(name, args, body)     table[#name "#" TLua_ToStr(TLua_NARGS(args))] = [] args { return body; };
+#define TLuaFuncOverload(name, args, body)				table[_TLua_OverloadName(name, args)] = [] args { return body; };
 
-#define  TLua_ToStr(s) #s
+#define _TLua_OverloadName(name, args)					_TLua_ToStr(name) "#" _TLua_ToStr(_TLua_NARGS(_TLuaEatBrace(args)))
 
-#define TLua_NARGS(...) TLua___NARGS(0, ## __VA_ARGS__, 5,4,3,2,1,0)
-#define TLua___NARGS(_0,_1,_2,_3,_4,_5,N,...) N
+// helpers
+#define _TLuaEatBrace(a)				_TLuaEatBraceImp a
+#define _TLuaEatBraceImp(...)			__VA_ARGS__
+#define _TLua_ToStr(s)					_TLua_ToStrImp(s)
+#define _TLua_ToStrImp(s)				#s
+
+//https://stackoverflow.com/questions/26682812/argument-counting-macro-with-zero-arguments-for-visualstudio-2010
+#ifdef _MSC_VER
+
+#define _TLua_EXPAND(x) x
+#define _TLua___NARGS(_1, _2, _3, _4, _5, VAL, ...) VAL
+#define _TLua_NARGS_1(...) _TLua_EXPAND(_TLua___NARGS(__VA_ARGS__, 4, 3, 2, 1, 0))
+#define _TLua_AUGMENTER(...) unused, __VA_ARGS__
+#define _TLua_NARGS(...) _TLua_NARGS_1(_TLua_AUGMENTER(__VA_ARGS__))
+
+#else
+
+#define _TLua_NARGS(...) _TLua___NARGS(0, ## __VA_ARGS__, 5,4,3,2,1,0)
+#define _TLua___NARGS(_0,_1,_2,_3,_4,_5,N,...) N
+
+#endif
+
+static_assert(_TLua_NARGS(const String a, b) == 2);
+static_assert(_TLua_NARGS() == 0);
+
+
 
 namespace tlua
 {
@@ -684,9 +707,11 @@ namespace tlua
 	{
 		static void push(T C::*m)
 		{
-			lua_pushinteger(L, (int)m);
+			lua_pushinteger(L, (int&)m);
 			lua_pushcclosure(L, [](lua_State* L) {
-				auto f = (decltype(m))lua_tointeger(L, lua_upvalueindex(1));
+				union { decltype(m) _m; lua_Integer _i; } u;
+				u._i = lua_tointeger(L, lua_upvalueindex(1));
+				auto f = u._m;
 				auto obj = Stack<C*>::get(1);
 				if (!obj) throw std::runtime_error("self is nil");
 				Stack<T>::push(obj->*f);
